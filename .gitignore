@@ -4,6 +4,7 @@ ckpt/
 extracted_frames/
 examples/
 VGGT-1B/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 **/__pycache__/

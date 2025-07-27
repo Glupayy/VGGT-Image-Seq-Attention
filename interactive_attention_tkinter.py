@@ -239,15 +239,29 @@ class TkinterAttentionVisualizer:
         # 🔥 使用模型的缓存系统替代hook方式
         return self.model.extract_patch_attention(img_idx, patch_y, patch_x, layer_name)
     
-    def visualize_patch_attention(self, patch_attention_data: Dict) -> Image.Image:
+    def visualize_patch_attention(self, patch_attention_data: Dict, attention_type: str = 'row') -> Image.Image:
         """可视化patch attention结果"""
         if patch_attention_data is None:
             return None
         
         source_img_idx = patch_attention_data['source_img_idx']
         source_patch = patch_attention_data['source_patch']
-        attention_maps = patch_attention_data['attention_maps']
         layer_name = patch_attention_data['layer_name']
+        
+        # 🔥 根据attention_type选择对应的attention maps
+        if attention_type == 'row':
+            attention_maps = patch_attention_data['attention_maps_row']
+            attention_title = "行Attention（该patch关注什么）"
+            attention_desc = "显示源patch对其他patch的关注程度"
+        elif attention_type == 'col':
+            attention_maps = patch_attention_data['attention_maps_col']
+            attention_title = "列Attention（什么关注该patch）"
+            attention_desc = "显示其他patch对源patch的关注程度"
+        else:
+            # 向后兼容
+            attention_maps = patch_attention_data['attention_maps']
+            attention_title = "Attention"
+            attention_desc = "Attention可视化"
         
         S, C, H, W = self.current_images.shape
         num_images = min(S, len(attention_maps))
@@ -339,7 +353,7 @@ class TkinterAttentionVisualizer:
                 axes[0, col_idx].set_visible(False)
                 axes[1, col_idx].set_visible(False)
         
-        plt.suptitle(f'Patch Attention Visualization - {layer_name} (Images 0-{min(2, num_images-1)})', fontsize=16, fontweight='bold')
+        plt.suptitle(f'{attention_title} - {layer_name} (Images 0-{min(2, num_images-1)})\n{attention_desc}', fontsize=14, fontweight='bold')
         plt.tight_layout()
         
         # 如果有超过3张图像，需要创建第二个图来显示剩余的图像
@@ -417,7 +431,7 @@ class TkinterAttentionVisualizer:
                     axes2[0, col_idx].set_visible(False)
                     axes2[1, col_idx].set_visible(False)
             
-            plt.suptitle(f'Patch Attention Visualization - {layer_name} (Images 3-{num_images-1})', fontsize=16, fontweight='bold')
+            plt.suptitle(f'{attention_title} - {layer_name} (Images 3-{num_images-1})\n{attention_desc}', fontsize=14, fontweight='bold')
             plt.tight_layout()
             
             # 保存第二个图
@@ -511,18 +525,23 @@ class TkinterAttentionVisualizer:
             self.root.after(0, lambda: self.info_label.config(text=f"❌ 分析attention时出错: {e}"))
     
     def _create_and_show_result(self, patch_attention_data: Dict, coord_info: Dict):
-        """在主线程中创建可视化结果并显示"""
+        """在主线程中创建双向attention可视化结果并显示"""
         try:
-            # 生成可视化结果（现在在主线程中）
-            result_image = self.visualize_patch_attention(patch_attention_data)
+            # 🔥 生成双向attention可视化结果
+            result_image_row = self.visualize_patch_attention(patch_attention_data, 'row')
+            result_image_col = self.visualize_patch_attention(patch_attention_data, 'col')
             
-            if result_image is not None:
-                self.show_result_window(result_image, coord_info, patch_attention_data)
+            if result_image_row is not None and result_image_col is not None:
+                # 显示两个窗口
+                self.show_result_window(result_image_row, coord_info, patch_attention_data, 'row')
+                self.show_result_window(result_image_col, coord_info, patch_attention_data, 'col')
                 
                 img_idx = coord_info['image_idx']
                 patch_x, patch_y = coord_info['patch_coords']
-                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention")
+                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的双向attention")
                 print(f"层: {patch_attention_data['layer_name']}")
+                print(f"   行attention窗口：显示该patch关注什么")
+                print(f"   列attention窗口：显示什么关注该patch")
             else:
                 self.info_label.config(text="❌ 生成可视化结果失败")
                 
@@ -532,23 +551,36 @@ class TkinterAttentionVisualizer:
             traceback.print_exc()
             self.info_label.config(text=f"❌ 创建可视化结果时出错: {e}")
     
-    def show_result_window(self, result_image: Image.Image, coord_info: Dict, patch_attention_data: Dict):
+    def show_result_window(self, result_image: Image.Image, coord_info: Dict, patch_attention_data: Dict, attention_type: str = 'row'):
         """显示结果窗口"""
-        # 关闭之前的结果窗口
-        if self.result_window:
-            self.result_window.destroy()
+        # 🔥 支持多窗口显示 - 为不同类型的attention创建独立窗口
+        window_attr = f'result_window_{attention_type}'
         
-        # 创建新的结果窗口 - 🔥 动态窗口尺寸
-        self.result_window = tk.Toplevel(self.root)
-        self.result_window.title("Attention可视化结果")
-        if self._get_high_quality_mode():
-            self.result_window.geometry("1500x1100")  # 高质量模式
+        # 关闭之前同类型的结果窗口
+        if hasattr(self, window_attr) and getattr(self, window_attr):
+            getattr(self, window_attr).destroy()
+        
+        # 🔥 创建新的结果窗口 - 支持多窗口显示
+        result_window = tk.Toplevel(self.root)
+        setattr(self, window_attr, result_window)
+        
+        # 设置窗口标题和位置
+        if attention_type == 'row':
+            result_window.title("🔍 行Attention - 该patch关注什么")
+            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
+            result_window.geometry(f"{base_geometry}+100+50")  # 左上位置
+        elif attention_type == 'col':
+            result_window.title("🔍 列Attention - 什么关注该patch")
+            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
+            result_window.geometry(f"{base_geometry}+150+100")  # 稍微偏移避免重叠
         else:
-            self.result_window.geometry("900x700")    # 标准模式
+            result_window.title("🔍 Attention可视化结果")
+            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
+            result_window.geometry(base_geometry)
         
         # 创建滚动框架
-        canvas = tk.Canvas(self.result_window)
-        scrollbar = ttk.Scrollbar(self.result_window, orient="vertical", command=canvas.yview)
+        canvas = tk.Canvas(result_window)
+        scrollbar = ttk.Scrollbar(result_window, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
         
         scrollable_frame.bind(
@@ -559,12 +591,23 @@ class TkinterAttentionVisualizer:
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # 显示信息
+        # 🔥 显示不同类型attention的信息
         img_idx = coord_info['image_idx']
         patch_x, patch_y = coord_info['patch_coords']
         
+        if attention_type == 'row':
+            attention_desc = "行attention（该patch关注什么）"
+            detail_desc = "显示源patch对其他patch的关注程度"
+        elif attention_type == 'col':
+            attention_desc = "列attention（什么关注该patch）"
+            detail_desc = "显示其他patch对源patch的关注程度"
+        else:
+            attention_desc = "Attention"
+            detail_desc = "Attention分析结果"
+        
         info_text = f"""
-✅ 成功分析图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention
+✅ 成功分析图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的{attention_desc}
+类型: {detail_desc}
 全局坐标: {coord_info['global_coords']}
 局部坐标: {coord_info['local_coords']}
 层: {patch_attention_data['layer_name']}
@@ -588,9 +631,10 @@ class TkinterAttentionVisualizer:
         
         # 添加保存按钮
         def save_result():
-            filename = f"attention_result_img{img_idx}_patch{patch_y}_{patch_x}.png"
+            type_suffix = f"_{attention_type}" if attention_type in ['row', 'col'] else ""
+            filename = f"attention_result_img{img_idx}_patch{patch_y}_{patch_x}{type_suffix}.png"
             result_image.save(filename)
-            messagebox.showinfo("保存成功", f"结果已保存为 {filename}")
+            messagebox.showinfo("保存成功", f"{attention_desc}结果已保存为 {filename}")
         
         save_btn = ttk.Button(scrollable_frame, text="保存结果", command=save_result)
         save_btn.pack(pady=5)
@@ -599,7 +643,7 @@ class TkinterAttentionVisualizer:
         scrollbar.pack(side="right", fill="y")
         
         # 更新主窗口信息
-        self.info_label.config(text=f"✅ 已显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention结果")
+        self.info_label.config(text=f"✅ 已显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的{attention_desc}结果")
     
     def update_canvas_display(self):
         """更新Canvas显示（记录缩放信息）"""
@@ -724,7 +768,9 @@ class TkinterAttentionVisualizer:
         help_text = """
 🎯 操作说明：
 • 移动鼠标查看实时坐标和patch信息
-• 点击任意位置分析该patch的attention（结果将在新窗口显示）
+• 点击任意位置分析该patch的双向attention（将打开两个窗口）
+  - 🔍 行Attention窗口：显示该patch关注什么（源→目标）
+  - 🔍 列Attention窗口：显示什么关注该patch（目标→源）
 • 支持2-6张图像的多视图attention分析
 • 高分辨率模式：生成更大更清晰的attention可视化图像（默认启用）
         """

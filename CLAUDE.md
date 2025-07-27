@@ -74,6 +74,7 @@ original_y = y / self.display_scale_y
 - ✅ 不同patch显示不同attention patterns
 - ✅ 多视图attention可视化正常
 - ✅ 高分辨率可视化已实现（2025-07-27）
+- ✅ 双向attention可视化已实现（2025-07-27）
 
 ## 分辨率优化改进 (2025-07-27)
 
@@ -95,6 +96,44 @@ original_y = y / self.display_scale_y
 - **动态切换**: 运行时可以切换分辨率模式，无需重启
 - **内存友好**: 只有在需要时才使用高分辨率设置
 - **用户体验**: 默认启用高分辨率模式，提供最佳视觉效果
+
+## 双向Attention可视化功能 (2025-07-27)
+
+### 核心创新
+实现了attention矩阵的双向分析，不仅显示"该patch关注什么"，还显示"什么关注该patch"。
+
+### 主要改进
+1. **双向Attention提取**:
+   - **行Attention**: `attention_avg[source_patch_global_idx]` - 该patch对其他patch的关注
+   - **列Attention**: `attention_avg[:, source_patch_global_idx]` - 其他patch对该patch的关注
+
+2. **多窗口显示系统**:
+   - 点击一个patch同时打开两个独立窗口
+   - 🔍 行Attention窗口: 显示源patch关注什么（源→目标）
+   - 🔍 列Attention窗口: 显示什么关注源patch（目标→源）
+   - 窗口位置自动偏移避免重叠
+
+3. **数据结构扩展**:
+```python
+return {
+    'attention_maps_row': attention_maps_row,  # 该patch关注什么
+    'attention_strengths_row': attention_strengths_row,
+    'attention_maps_col': attention_maps_col,  # 什么关注该patch
+    'attention_strengths_col': attention_strengths_col,
+    # 保持向后兼容性
+    'attention_maps': attention_maps_row,
+}
+```
+
+4. **可视化增强**:
+   - 不同类型attention使用不同的窗口标题和描述
+   - 保存文件名自动添加类型后缀 (`_row`, `_col`)
+   - 图形标题明确标注attention方向和含义
+
+### 技术实现
+- **attention_cache.py**: 核心双向提取逻辑
+- **interactive_attention_tkinter.py**: GUI多窗口显示系统
+- **完全向后兼容**: 保持所有原有功能正常工作
 
 ## 待优化项目
 - 支持更多层的attention分析

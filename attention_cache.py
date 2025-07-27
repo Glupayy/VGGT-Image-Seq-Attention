@@ -328,40 +328,72 @@ class AttentionCacheManager:
             print(f"❌ Source patch索引超出范围: {source_patch_global_idx} >= {attention_avg.shape[0]}")
             return None
         
-        # 提取该patch对所有tokens的attention
-        patch_attention = attention_avg[source_patch_global_idx]  # [N]
-        # here patch_attention_2 = attention_avg[:,source_patch_global_idx]
+        # 🔥 提取双向attention：行和列
+        # 行：该patch对所有tokens的attention（该patch关注什么）
+        patch_attention_row = attention_avg[source_patch_global_idx]  # [N]
+        # 列：所有tokens对该patch的attention（什么关注该patch）
+        patch_attention_col = attention_avg[:, source_patch_global_idx]  # [N]
+        
         print(f"🔍 提取的attention权重统计:")
-        print(f"   形状: {patch_attention.shape}")
-        print(f"   最小值: {patch_attention.min():.6f}")
-        print(f"   最大值: {patch_attention.max():.6f}")
-        print(f"   平均值: {patch_attention.mean():.6f}")
-        print(f"   总和: {patch_attention.sum():.6f}")
+        print(f"   行attention（该patch关注什么）:")
+        print(f"     形状: {patch_attention_row.shape}")
+        print(f"     最小值: {patch_attention_row.min():.6f}")
+        print(f"     最大值: {patch_attention_row.max():.6f}")
+        print(f"     平均值: {patch_attention_row.mean():.6f}")
+        print(f"     总和: {patch_attention_row.sum():.6f}")
         
-        # 分解为对每个图像patches的attention
-        attention_maps_per_image = []
-        attention_strengths = []
+        print(f"   列attention（什么关注该patch）:")
+        print(f"     形状: {patch_attention_col.shape}")
+        print(f"     最小值: {patch_attention_col.min():.6f}")
+        print(f"     最大值: {patch_attention_col.max():.6f}")
+        print(f"     平均值: {patch_attention_col.mean():.6f}")
+        print(f"     总和: {patch_attention_col.sum():.6f}")
         
-        for target_img_idx in range(num_frames):
-            target_patch_start = target_img_idx * tokens_per_frame + patch_start_per_frame
-            target_patch_end = target_patch_start + patch_h * patch_w
+        # 🔥 分解为对每个图像patches的双向attention
+        def _extract_attention_maps(patch_attention, desc):
+            """提取attention maps的辅助函数"""
+            attention_maps_per_image = []
+            attention_strengths = []
             
-            if target_patch_end <= len(patch_attention):
-                target_attention = patch_attention[target_patch_start:target_patch_end]
-                target_attention_2d = target_attention.reshape(patch_h, patch_w)
+            for target_img_idx in range(num_frames):
+                target_patch_start = target_img_idx * tokens_per_frame + patch_start_per_frame
+                target_patch_end = target_patch_start + patch_h * patch_w
                 
-                attention_maps_per_image.append(target_attention_2d)
-                attention_strengths.append(target_attention.sum().item())
-            else:
-                # 处理边界情况
-                attention_maps_per_image.append(torch.zeros(patch_h, patch_w))
-                attention_strengths.append(0.0)
+                if target_patch_end <= len(patch_attention):
+                    target_attention = patch_attention[target_patch_start:target_patch_end]
+                    target_attention_2d = target_attention.reshape(patch_h, patch_w)
+                    
+                    attention_maps_per_image.append(target_attention_2d)
+                    attention_strengths.append(target_attention.sum().item())
+                else:
+                    # 处理边界情况
+                    attention_maps_per_image.append(torch.zeros(patch_h, patch_w))
+                    attention_strengths.append(0.0)
+            
+            print(f"🔍 {desc} attention maps生成完成，共{len(attention_maps_per_image)}张图像")
+            return attention_maps_per_image, attention_strengths
+        
+        # 生成行attention maps（该patch关注什么）
+        attention_maps_row, attention_strengths_row = _extract_attention_maps(
+            patch_attention_row, "行"
+        )
+        
+        # 生成列attention maps（什么关注该patch）  
+        attention_maps_col, attention_strengths_col = _extract_attention_maps(
+            patch_attention_col, "列"
+        )
         
         return {
             'source_img_idx': source_img_idx,
             'source_patch': (patch_y, patch_x),
-            'attention_maps': attention_maps_per_image,
-            'attention_strengths': attention_strengths,
+            # 🔥 双向attention数据
+            'attention_maps_row': attention_maps_row,  # 该patch关注什么
+            'attention_strengths_row': attention_strengths_row,
+            'attention_maps_col': attention_maps_col,  # 什么关注该patch
+            'attention_strengths_col': attention_strengths_col,
+            # 保持向后兼容性
+            'attention_maps': attention_maps_row,  # 默认使用行attention保持兼容性
+            'attention_strengths': attention_strengths_row,
             'layer_name': layer_name,
             'patch_size': self.model_info['patch_size'],
             'run_id': cache_data['run_id']

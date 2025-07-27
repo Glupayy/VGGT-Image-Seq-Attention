@@ -38,6 +38,9 @@ class TkinterAttentionVisualizer:
         self.patch_size = 14
         self.grid_config = None
         
+        # 🔥 分辨率控制选项 - 延迟初始化
+        self.high_quality_mode = None  # 将在create_gui中初始化
+        
         # 🔥 移除hook相关变量
         # self.current_attention_maps = None  # 现在通过模型缓存获取
         # self.attention_hooks = []           # 不再需要hooks
@@ -59,6 +62,22 @@ class TkinterAttentionVisualizer:
         self.model_loaded = False
         
         print("🚀 初始化Tkinter可视化器...")
+    
+    def _get_high_quality_mode(self):
+        """安全获取高质量模式状态"""
+        return self.high_quality_mode.get() if self.high_quality_mode is not None else True
+    
+    def on_quality_mode_changed(self):
+        """分辨率模式改变时的回调函数"""
+        if self.high_quality_mode is None:
+            return
+        mode = "高分辨率" if self._get_high_quality_mode() else "标准分辨率"
+        print(f"🎨 分辨率模式已切换为: {mode}")
+        # 更新信息显示
+        if hasattr(self, 'info_label') and self.info_label:
+            current_text = self.info_label.cget('text')
+            if "模式:" not in current_text:
+                self.info_label.config(text=f"{current_text} | 当前模式: {mode}")
     
     def __del__(self):
         """析构函数，清理资源"""
@@ -233,16 +252,30 @@ class TkinterAttentionVisualizer:
         S, C, H, W = self.current_images.shape
         num_images = min(S, len(attention_maps))
         
-        # 根据图像数量调整布局
+        # 根据图像数量调整布局 - 🔥 动态分辨率控制
+        is_high_quality = self._get_high_quality_mode()
+        
         if num_images <= 3:
             cols = num_images
-            fig_width = cols * 4
-            fig_height = 8
+            if is_high_quality:
+                fig_width = cols * 6  # 高质量模式
+                fig_height = 12
+                dpi_setting = 300
+            else:
+                fig_width = cols * 4  # 标准模式
+                fig_height = 8
+                dpi_setting = 150
         else:
             # 对于4-6张图像，使用3列2行布局
             cols = 3
-            fig_width = 12
-            fig_height = 10
+            if is_high_quality:
+                fig_width = 18        # 高质量模式
+                fig_height = 15
+                dpi_setting = 300
+            else:
+                fig_width = 12        # 标准模式
+                fig_height = 10
+                dpi_setting = 150
         
         # 创建足够的子图：2行显示原图和attention
         rows = 2
@@ -281,22 +314,24 @@ class TkinterAttentionVisualizer:
             ax_attn = axes[1, i] if cols > 1 else axes[1]
             attention_map = attention_maps[i]
             
-            # 上采样到原图尺寸
+            # 上采样到原图尺寸 - 🔥 动态插值质量控制
+            interpolation_mode = 'bicubic' if is_high_quality else 'bilinear'
             attention_upsampled = torch.nn.functional.interpolate(
                 attention_map.unsqueeze(0).unsqueeze(0),
-                size=(H, W), mode='bilinear', align_corners=False
+                size=(H, W), mode=interpolation_mode, align_corners=False
             ).squeeze()
             
             # 显示原图作为背景
             ax_attn.imshow(img, alpha=0.7)
             
-            # 叠加attention热图
-            im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.8, cmap='hot')
-            ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.4f}')
+            # 叠加attention热图 - 🔥 提升热图质量
+            im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
+            ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.6f}', fontsize=10)
             ax_attn.axis('off')
             
-            # 添加colorbar
-            plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
+            # 添加colorbar - 🔥 提升精度显示
+            cbar = plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
+            cbar.ax.tick_params(labelsize=8)  # 设置colorbar字体大小
         
         # 隐藏未使用的子图（如果图像数量少于3）
         for col_idx in range(min(3, num_images), cols):
@@ -311,7 +346,7 @@ class TkinterAttentionVisualizer:
         if num_images > 3:
             # 保存第一个图
             buf1 = io.BytesIO()
-            plt.savefig(buf1, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(buf1, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
             buf1.seek(0)
             first_image = Image.open(buf1)
             plt.close()
@@ -319,7 +354,10 @@ class TkinterAttentionVisualizer:
             # 创建第二个图显示图像3-5
             remaining_images = num_images - 3
             cols2 = min(3, remaining_images)
-            fig2, axes2 = plt.subplots(2, cols2, figsize=(cols2 * 4, 8))
+            # 🔥 动态调整第二图尺寸
+            second_fig_width = cols2 * (6 if is_high_quality else 4)
+            second_fig_height = 12 if is_high_quality else 8
+            fig2, axes2 = plt.subplots(2, cols2, figsize=(second_fig_width, second_fig_height))
             
             if remaining_images == 1:
                 axes2 = axes2.reshape(2, 1)
@@ -354,22 +392,24 @@ class TkinterAttentionVisualizer:
                 ax_attn = axes2[1, col_idx] if cols2 > 1 else axes2[1]
                 attention_map = attention_maps[i]
                 
-                # 上采样到原图尺寸
+                # 上采样到原图尺寸 - 🔥 动态插值质量控制
+                interpolation_mode = 'bicubic' if is_high_quality else 'bilinear'
                 attention_upsampled = torch.nn.functional.interpolate(
                     attention_map.unsqueeze(0).unsqueeze(0),
-                    size=(H, W), mode='bilinear', align_corners=False
+                    size=(H, W), mode=interpolation_mode, align_corners=False
                 ).squeeze()
                 
                 # 显示原图作为背景
                 ax_attn.imshow(img, alpha=0.7)
                 
-                # 叠加attention热图
-                im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.8, cmap='hot')
-                ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.4f}')
+                # 叠加attention热图 - 🔥 提升热图质量
+                im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
+                ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.6f}', fontsize=10)
                 ax_attn.axis('off')
                 
-                # 添加colorbar
-                plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
+                # 添加colorbar - 🔥 提升精度显示
+                cbar = plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
+                cbar.ax.tick_params(labelsize=8)  # 设置colorbar字体大小
             
             # 隐藏未使用的子图
             for col_idx in range(remaining_images, cols2):
@@ -382,7 +422,7 @@ class TkinterAttentionVisualizer:
             
             # 保存第二个图
             buf2 = io.BytesIO()
-            plt.savefig(buf2, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(buf2, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
             buf2.seek(0)
             second_image = Image.open(buf2)
             plt.close()
@@ -399,7 +439,7 @@ class TkinterAttentionVisualizer:
         else:
             # 只有3张或更少图像，直接返回
             buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(buf, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
             buf.seek(0)
             plt.close()
             
@@ -498,10 +538,13 @@ class TkinterAttentionVisualizer:
         if self.result_window:
             self.result_window.destroy()
         
-        # 创建新的结果窗口
+        # 创建新的结果窗口 - 🔥 动态窗口尺寸
         self.result_window = tk.Toplevel(self.root)
         self.result_window.title("Attention可视化结果")
-        self.result_window.geometry("800x600")
+        if self._get_high_quality_mode():
+            self.result_window.geometry("1500x1100")  # 高质量模式
+        else:
+            self.result_window.geometry("900x700")    # 标准模式
         
         # 创建滚动框架
         canvas = tk.Canvas(self.result_window)
@@ -531,8 +574,11 @@ class TkinterAttentionVisualizer:
         info_label.pack(pady=10)
         
         # 显示结果图像
-        # 调整图像大小以适应窗口
-        max_width, max_height = 700, 500
+        # 调整图像大小以适应窗口 - 🔥 动态分辨率控制
+        if self._get_high_quality_mode():
+            max_width, max_height = 1400, 1000  # 高质量模式
+        else:
+            max_width, max_height = 800, 600    # 标准模式
         result_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
         
         result_photo = ImageTk.PhotoImage(result_image)
@@ -626,7 +672,10 @@ class TkinterAttentionVisualizer:
         """创建GUI界面"""
         self.root = tk.Tk()
         self.root.title("VGGT Interactive Attention Visualizer")
-        self.root.geometry("1000x700")
+        self.root.geometry("1300x900")  # 🔥 提升主窗口尺寸：1000x700→1300x900
+        
+        # 🔥 现在可以安全地初始化tkinter变量
+        self.high_quality_mode = tk.BooleanVar(value=True)  # 默认启用高质量模式
         
         # 创建主框架
         main_frame = ttk.Frame(self.root)
@@ -639,8 +688,20 @@ class TkinterAttentionVisualizer:
         ttk.Label(control_frame, text="🔍 VGGT Interactive Attention Visualizer", 
                  font=("Arial", 16, "bold")).pack(side="left")
         
-        load_btn = ttk.Button(control_frame, text="📁 加载图像", command=self.load_images_dialog)
-        load_btn.pack(side="right", padx=(10, 0))
+        # 🔥 添加分辨率控制选项
+        quality_frame = ttk.Frame(control_frame)
+        quality_frame.pack(side="right", padx=(10, 0))
+        
+        quality_checkbox = ttk.Checkbutton(
+            quality_frame, 
+            text="高分辨率模式", 
+            variable=self.high_quality_mode,
+            command=self.on_quality_mode_changed
+        )
+        quality_checkbox.pack(side="top")
+        
+        load_btn = ttk.Button(quality_frame, text="📁 加载图像", command=self.load_images_dialog)
+        load_btn.pack(side="bottom", pady=(5, 0))
         
         # 信息显示区域
         self.info_label = ttk.Label(main_frame, text="请点击'加载图像'按钮选择2-6张图像文件", 
@@ -665,6 +726,7 @@ class TkinterAttentionVisualizer:
 • 移动鼠标查看实时坐标和patch信息
 • 点击任意位置分析该patch的attention（结果将在新窗口显示）
 • 支持2-6张图像的多视图attention分析
+• 高分辨率模式：生成更大更清晰的attention可视化图像（默认启用）
         """
         
         help_label = ttk.Label(main_frame, text=help_text, font=("Arial", 10), 

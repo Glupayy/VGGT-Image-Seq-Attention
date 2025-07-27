@@ -330,7 +330,7 @@ class AttentionCacheManager:
         
         # 提取该patch对所有tokens的attention
         patch_attention = attention_avg[source_patch_global_idx]  # [N]
-        
+        # here patch_attention_2 = attention_avg[:,source_patch_global_idx]
         print(f"🔍 提取的attention权重统计:")
         print(f"   形状: {patch_attention.shape}")
         print(f"   最小值: {patch_attention.min():.6f}")

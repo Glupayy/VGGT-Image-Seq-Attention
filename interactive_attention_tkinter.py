@@ -17,12 +17,12 @@ import io
 from typing import Dict, List, Tuple, Optional
 import threading
 
-# 导入VGGT相关模块
-from vggt.models.vggt import VGGT
+# 导入VGGT相关模块（使用可视化版本）
+from vggt.models.vggt_vis import VGGT
 from vggt.utils.load_fn import load_and_preprocess_images
 
-# 导入现有的attention工具
-from attn_util import extract_single_patch_attention_simple, pixel_to_patch_coords
+# 导入现有的attention工具（用于兼容性）
+from attn_util import pixel_to_patch_coords
 
 class TkinterAttentionVisualizer:
     def __init__(self):
@@ -35,10 +35,12 @@ class TkinterAttentionVisualizer:
         
         # 存储当前状态
         self.current_images = None
-        self.current_attention_maps = None
         self.patch_size = 14
-        self.attention_hooks = []
         self.grid_config = None
+        
+        # 🔥 移除hook相关变量
+        # self.current_attention_maps = None  # 现在通过模型缓存获取
+        # self.attention_hooks = []           # 不再需要hooks
         
         # GUI相关
         self.root = None
@@ -48,11 +50,21 @@ class TkinterAttentionVisualizer:
         self.info_label = None
         self.result_window = None
         
+        # 显示缩放信息
+        self.display_scale_x = 1.0
+        self.display_scale_y = 1.0
+        
         # 初始化模型（延迟加载）
         self.model = None
         self.model_loaded = False
         
         print("🚀 初始化Tkinter可视化器...")
+    
+    def __del__(self):
+        """析构函数，清理资源"""
+        if hasattr(self, 'model') and self.model:
+            self.model.disable_attention_caching()
+            self.model.clear_attention_cache()
     
     def load_model(self):
         """延迟加载VGGT模型"""
@@ -63,58 +75,8 @@ class TkinterAttentionVisualizer:
             self.model_loaded = True
             print("✅ Model loaded successfully!")
     
-    def setup_attention_hooks(self, target_layers=[20, 21, 22, 23]):
-        """设置attention hooks来捕获中间层的attention maps"""
-        self.attention_maps = {}
-        self.attention_hooks = []
-        
-        def create_hook(name):
-            def hook(module, input, output):
-                if hasattr(module, 'attn') and hasattr(module.attn, 'qkv'):
-                    x = input[0]
-                    B, N, C = x.shape
-                    
-                    if B > 1:
-                        x = x[:1]
-                        B = 1
-                    
-                    qkv = module.attn.qkv(x).reshape(B, N, 3, module.attn.num_heads, module.attn.head_dim).permute(2, 0, 3, 1, 4)
-                    q, k, v = qkv.unbind(0)
-                    
-                    num_heads_to_keep = min(8, module.attn.num_heads)
-                    q = q[:, :num_heads_to_keep]
-                    k = k[:, :num_heads_to_keep]
-                    
-                    attn = (q @ k.transpose(-2, -1)) * module.attn.scale
-                    attn = attn.softmax(dim=-1)
-                    
-                    self.attention_maps[name] = {
-                        'attention': attn.detach().cpu(),
-                        'tokens_shape': (B, N, C),
-                        'num_heads': num_heads_to_keep
-                    }
-                    
-                    del attn, q, k, v, qkv
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-            return hook
-        
-        # 清除旧的hooks
-        for hook in self.attention_hooks:
-            hook.remove()
-        self.attention_hooks = []
-        
-        # 注册新的hooks
-        for i in target_layers:
-            if i < len(self.model.aggregator.frame_blocks):
-                hook_name = f'frame_block_{i}'
-                hook = self.model.aggregator.frame_blocks[i].register_forward_hook(create_hook(hook_name))
-                self.attention_hooks.append(hook)
-            
-            if i < len(self.model.aggregator.global_blocks):
-                hook_name = f'global_block_{i}'
-                hook = self.model.aggregator.global_blocks[i].register_forward_hook(create_hook(hook_name))
-                self.attention_hooks.append(hook)
+    # 🔥 移除整个setup_attention_hooks方法，不再需要！
+    # 现在直接使用模型内置的attention缓存系统
     
     def load_images(self, image_paths: List[str]):
         """加载图像并运行模型"""
@@ -126,37 +88,44 @@ class TkinterAttentionVisualizer:
             
             # 加载和预处理图像
             self.current_images = load_and_preprocess_images(image_paths).to(self.device)
+            print('loaded images ')
+            # 🔥 新的缓存系统：启用attention缓存
+            target_layers = ['global_block_20', 'global_block_21', 'global_block_22', 'global_block_23']
+            self.model.enable_attention_caching(target_layers)
+            self.model.start_new_attention_run()
             
-            # 设置attention hooks
-            self.setup_attention_hooks()
-            
-            # 运行模型
-            print("🔄 Running model to capture attention...")
+            # 运行模型（只需一次！）
+            print("🔄 Running model with attention caching...")
             with torch.no_grad():
                 if torch.cuda.is_available():
                     with torch.amp.autocast('cuda', dtype=self.dtype):
-                        self.attention_maps.clear()
                         images_subset = self.current_images[:6] if self.current_images.shape[0] > 6 else self.current_images
                         _ = self.model(images_subset)
                         torch.cuda.empty_cache()
                 else:
                     print('processing on CPU...')
-                    self.attention_maps.clear()
                     images_subset = self.current_images[:6] if self.current_images.shape[0] > 6 else self.current_images
                     _ = self.model(images_subset)
-            
-            self.current_attention_maps = self.attention_maps.copy()
             
             # 创建图像网格
             self.create_image_grid(images_subset)
             
-            print(f"✅ 成功处理 {len(image_paths)} 张图像，捕获了 {len(self.attention_maps)} 个attention层")
+            # 获取缓存信息用于验证
+            cache_info = self.model.get_attention_cache_info()
+            cached_layers = cache_info.get('cached_layers', [])
+            
+            print(f"✅ 成功处理 {len(image_paths)} 张图像，缓存了 {len(cached_layers)} 个attention层: {cached_layers}")
             return True
             
         except Exception as e:
             print(f"❌ 加载图像时出错: {e}")
             import traceback
             traceback.print_exc()
+            
+            # 清理可能的缓存
+            if hasattr(self, 'model') and self.model:
+                self.model.clear_attention_cache()
+            
             return False
     
     def create_image_grid(self, images: torch.Tensor):
@@ -204,27 +173,31 @@ class TkinterAttentionVisualizer:
         print(f"🖼️ 创建网格图像: {grid_array.shape}")
     
     def get_coordinate_info(self, x: int, y: int) -> Dict:
-        """根据坐标获取详细信息"""
+        """根据坐标获取详细信息（修复了Canvas缩放问题）"""
         if self.grid_config is None:
             return None
         
         config = self.grid_config
         
+        # 🔥 关键修复：将显示坐标映射回原始图像坐标
+        original_x = x / self.display_scale_x
+        original_y = y / self.display_scale_y
+        
         # 确定点击的是哪个图像
-        col = x // config['image_width']
-        row = y // config['image_height']
+        col = int(original_x // config['image_width'])
+        row = int(original_y // config['image_height'])
         img_idx = row * config['cols'] + col
         
         if img_idx >= config['num_images'] or col >= config['cols'] or row >= config['rows']:
             return None
         
         # 计算在单个图像内的相对坐标
-        local_x = x % config['image_width']
-        local_y = y % config['image_height']
+        local_x = original_x % config['image_width']
+        local_y = original_y % config['image_height']
         
         # 计算patch坐标
-        patch_x = local_x // config['patch_size']
-        patch_y = local_y // config['patch_size']
+        patch_x = int(local_x // config['patch_size'])
+        patch_y = int(local_y // config['patch_size'])
         
         patch_h = config['image_height'] // config['patch_size']
         patch_w = config['image_width'] // config['patch_size']
@@ -234,6 +207,7 @@ class TkinterAttentionVisualizer:
         
         return {
             'global_coords': (x, y),
+            'original_coords': (original_x, original_y),
             'image_idx': img_idx,
             'local_coords': (local_x, local_y),
             'patch_coords': (patch_x, patch_y),
@@ -242,11 +216,9 @@ class TkinterAttentionVisualizer:
         }
     
     def extract_patch_attention(self, img_idx: int, patch_y: int, patch_x: int, layer_name: str = 'global_block_23') -> Dict:
-        """提取指定patch的attention maps"""
-        return extract_single_patch_attention_simple(
-            self.current_attention_maps, self.current_images, 
-            img_idx, patch_y, patch_x, layer_name
-        )
+        """提取指定patch的attention maps（使用新的缓存系统）"""
+        # 🔥 使用模型的缓存系统替代hook方式
+        return self.model.extract_patch_attention(img_idx, patch_y, patch_x, layer_name)
     
     def visualize_patch_attention(self, patch_attention_data: Dict) -> Image.Image:
         """可视化patch attention结果"""
@@ -466,7 +438,8 @@ class TkinterAttentionVisualizer:
         coord_info = self.get_coordinate_info(x, y)
         
         if coord_info and coord_info['valid']:
-            info_text = f"坐标: ({x}, {y}) | 图像: {coord_info['image_idx']} | 局部: {coord_info['local_coords']} | Patch: {coord_info['patch_coords']} | 点击分析attention"
+            orig_x, orig_y = coord_info['original_coords']
+            info_text = f"显示坐标: ({x}, {y}) | 原始坐标: ({orig_x:.1f}, {orig_y:.1f}) | 图像: {coord_info['image_idx']} | Patch: {coord_info['patch_coords']} | 点击分析attention"
         else:
             info_text = f"坐标: ({x}, {y}) | 无效区域"
         
@@ -485,22 +458,39 @@ class TkinterAttentionVisualizer:
             
             if patch_attention_data is None:
                 print("❌ 无法提取attention数据")
-                self.info_label.config(text="❌ 无法提取attention数据")
+                self.root.after(0, lambda: self.info_label.config(text="❌ 无法提取attention数据"))
                 return
             
-            # 生成可视化结果
-            result_image = self.visualize_patch_attention(patch_attention_data)
-            
-            if result_image is not None:
-                # 在主线程中显示结果
-                self.root.after(0, self.show_result_window, result_image, coord_info, patch_attention_data)
-                
-                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention")
-                print(f"层: {patch_attention_data['layer_name']}")
+            # 在主线程中生成可视化结果和显示
+            self.root.after(0, self._create_and_show_result, patch_attention_data, coord_info)
             
         except Exception as e:
             print(f"❌ 分析attention时出错: {e}")
-            self.info_label.config(text=f"❌ 分析attention时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            self.root.after(0, lambda: self.info_label.config(text=f"❌ 分析attention时出错: {e}"))
+    
+    def _create_and_show_result(self, patch_attention_data: Dict, coord_info: Dict):
+        """在主线程中创建可视化结果并显示"""
+        try:
+            # 生成可视化结果（现在在主线程中）
+            result_image = self.visualize_patch_attention(patch_attention_data)
+            
+            if result_image is not None:
+                self.show_result_window(result_image, coord_info, patch_attention_data)
+                
+                img_idx = coord_info['image_idx']
+                patch_x, patch_y = coord_info['patch_coords']
+                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention")
+                print(f"层: {patch_attention_data['layer_name']}")
+            else:
+                self.info_label.config(text="❌ 生成可视化结果失败")
+                
+        except Exception as e:
+            print(f"❌ 创建可视化结果时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            self.info_label.config(text=f"❌ 创建可视化结果时出错: {e}")
     
     def show_result_window(self, result_image: Image.Image, coord_info: Dict, patch_attention_data: Dict):
         """显示结果窗口"""
@@ -566,7 +556,7 @@ class TkinterAttentionVisualizer:
         self.info_label.config(text=f"✅ 已显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention结果")
     
     def update_canvas_display(self):
-        """更新Canvas显示"""
+        """更新Canvas显示（记录缩放信息）"""
         if self.grid_image_pil and self.canvas:
             # 调整图像大小以适应canvas
             canvas_width = self.canvas.winfo_width()
@@ -585,6 +575,13 @@ class TkinterAttentionVisualizer:
                     # 图像更高，以高度为准
                     new_height = canvas_height
                     new_width = int(canvas_height * img_ratio)
+                
+                # 🔥 记录缩放比例
+                self.display_scale_x = new_width / self.grid_image_pil.width
+                self.display_scale_y = new_height / self.grid_image_pil.height
+                
+                print(f"🔍 Canvas缩放信息: 原始({self.grid_image_pil.width}x{self.grid_image_pil.height}) → 显示({new_width}x{new_height})")
+                print(f"🔍 缩放比例: x={self.display_scale_x:.4f}, y={self.display_scale_y:.4f}")
                 
                 # 调整图像大小
                 resized_image = self.grid_image_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
@@ -709,6 +706,12 @@ class TkinterAttentionVisualizer:
             print(f"❌ GUI运行出错: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            # 确保清理资源
+            if hasattr(self, 'model') and self.model:
+                self.model.disable_attention_caching()
+                self.model.clear_attention_cache()
+                print("🗑️ 已清理attention缓存资源")
 
 def main():
     """主函数"""

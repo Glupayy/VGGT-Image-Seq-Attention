@@ -239,8 +239,8 @@ class TkinterAttentionVisualizer:
         # 🔥 使用模型的缓存系统替代hook方式
         return self.model.extract_patch_attention(img_idx, patch_y, patch_x, layer_name)
     
-    def visualize_patch_attention(self, patch_attention_data: Dict, attention_type: str = 'row') -> Image.Image:
-        """可视化patch attention结果"""
+    def visualize_patch_attention_dual(self, patch_attention_data: Dict) -> Image.Image:
+        """可视化双向patch attention结果（左右对比）"""
         if patch_attention_data is None:
             return None
         
@@ -248,216 +248,150 @@ class TkinterAttentionVisualizer:
         source_patch = patch_attention_data['source_patch']
         layer_name = patch_attention_data['layer_name']
         
-        # 🔥 根据attention_type选择对应的attention maps
-        if attention_type == 'row':
-            attention_maps = patch_attention_data['attention_maps_row']
-            attention_title = "行Attention（该patch关注什么）"
-            attention_desc = "显示源patch对其他patch的关注程度"
-        elif attention_type == 'col':
-            attention_maps = patch_attention_data['attention_maps_col']
-            attention_title = "列Attention（什么关注该patch）"
-            attention_desc = "显示其他patch对源patch的关注程度"
-        else:
-            # 向后兼容
-            attention_maps = patch_attention_data['attention_maps']
-            attention_title = "Attention"
-            attention_desc = "Attention可视化"
+        # 🔥 获取双向attention maps
+        attention_maps_row = patch_attention_data['attention_maps_row']  # 该patch关注什么
+        attention_maps_col = patch_attention_data['attention_maps_col']  # 什么关注该patch
         
         S, C, H, W = self.current_images.shape
-        num_images = min(S, len(attention_maps))
+        num_images = min(S, len(attention_maps_row))
         
-        # 根据图像数量调整布局 - 🔥 动态分辨率控制
+        # 🔥 简化布局：左右对比，每个图像占两列（行attention + 列attention）
         is_high_quality = self._get_high_quality_mode()
         
+        # 计算布局参数
+        cols_per_image = 2  # 每张图像需要2列（左：行attention，右：列attention）
+        
         if num_images <= 3:
-            cols = num_images
-            if is_high_quality:
-                fig_width = cols * 6  # 高质量模式
-                fig_height = 12
-                dpi_setting = 300
-            else:
-                fig_width = cols * 4  # 标准模式
-                fig_height = 8
-                dpi_setting = 150
+            # 对于少量图像，使用单行布局
+            fig_cols = num_images * cols_per_image
+            fig_rows = 2  # 原图 + attention对比
+            base_width = 4 if is_high_quality else 3
+            fig_width = fig_cols * base_width
+            fig_height = 8 if is_high_quality else 6
         else:
-            # 对于4-6张图像，使用3列2行布局
-            cols = 3
-            if is_high_quality:
-                fig_width = 18        # 高质量模式
-                fig_height = 15
-                dpi_setting = 300
+            # 对于多图像，分两行显示
+            fig_cols = 3 * cols_per_image  # 每行最多3张图像
+            fig_rows = 4  # 两套（原图 + attention对比）
+            base_width = 3.5 if is_high_quality else 2.5  
+            fig_width = fig_cols * base_width
+            fig_height = 12 if is_high_quality else 10
+        
+        dpi_setting = 300 if is_high_quality else 150
+        
+        # 创建子图
+        fig, axes = plt.subplots(fig_rows, fig_cols, figsize=(fig_width, fig_height))
+        if fig_rows == 1:
+            axes = axes.reshape(1, -1)
+        elif fig_cols == 1:
+            axes = axes.reshape(-1, 1)
+        
+        patch_y, patch_x = source_patch
+        
+        # 🔥 绘制左右对比的attention
+        images_per_row = min(3, num_images)
+        
+        for i in range(num_images):
+            if i < images_per_row:
+                # 第一行图像
+                row_base = 0
+                col_offset = i * cols_per_image
             else:
-                fig_width = 12        # 标准模式
-                fig_height = 10
-                dpi_setting = 150
-        
-        # 创建足够的子图：2行显示原图和attention
-        rows = 2
-        fig, axes = plt.subplots(rows, cols, figsize=(fig_width, fig_height))
-        
-        # 确保axes是2D数组
-        if num_images == 1:
-            axes = axes.reshape(2, 1)
-        elif cols == 1:
-            axes = axes.reshape(2, 1)
-        
-        # 显示前3张图像（第一组）
-        for i in range(min(3, num_images)):
-            # 上方显示原图 + source patch标记
-            ax_img = axes[0, i] if cols > 1 else axes[0]
+                # 第二行图像（如果有的话）
+                row_base = 2
+                col_offset = (i - images_per_row) * cols_per_image
+            
+            # 获取图像数据
             img = self.current_images[i].permute(1, 2, 0).cpu().numpy()
             img = np.clip(img, 0, 1)
-            ax_img.imshow(img)
             
-            # 如果是source图像，标记source patch
+            # 原图显示（跨越两列）
+            ax_orig_left = axes[row_base, col_offset]
+            ax_orig_right = axes[row_base, col_offset + 1]
+            
+            # 左侧原图标题
+            ax_orig_left.imshow(img)
             if i == source_img_idx:
-                patch_y, patch_x = source_patch
                 rect = patches.Rectangle(
                     (patch_x * self.patch_size, patch_y * self.patch_size),
                     self.patch_size, self.patch_size,
                     linewidth=3, edgecolor='red', facecolor='none'
                 )
-                ax_img.add_patch(rect)
-                ax_img.set_title(f'Source Image {i}\nPatch ({patch_y}, {patch_x})', color='red', fontweight='bold')
+                ax_orig_left.add_patch(rect)
+                ax_orig_left.set_title(f'Source Image {i}\\nPatch ({patch_y}, {patch_x})', color='red', fontweight='bold', fontsize=10)
             else:
-                ax_img.set_title(f'Target Image {i}')
+                ax_orig_left.set_title(f'Target Image {i}', fontsize=10)
+            ax_orig_left.axis('off')
             
-            ax_img.axis('off')
+            # 右侧原图（用于对比）
+            ax_orig_right.imshow(img)
+            ax_orig_right.set_title(f'Target Image {i}', fontsize=10)
+            ax_orig_right.axis('off')
             
-            # 下方显示attention热图
-            ax_attn = axes[1, i] if cols > 1 else axes[1]
-            attention_map = attention_maps[i]
+            # Attention显示
+            attention_row_idx = row_base + 1
             
-            # 上采样到原图尺寸 - 🔥 动态插值质量控制
+            # 左侧：行attention
+            attention_map_row = attention_maps_row[i]
             interpolation_mode = 'bicubic' if is_high_quality else 'bilinear'
-            attention_upsampled = torch.nn.functional.interpolate(
-                attention_map.unsqueeze(0).unsqueeze(0),
+            attention_upsampled_row = torch.nn.functional.interpolate(
+                attention_map_row.unsqueeze(0).unsqueeze(0),
                 size=(H, W), mode=interpolation_mode, align_corners=False
             ).squeeze()
             
-            # 显示原图作为背景
-            ax_attn.imshow(img, alpha=0.7)
+            ax_row = axes[attention_row_idx, col_offset]
+            ax_row.imshow(img, alpha=0.7)
+            im_row = ax_row.imshow(attention_upsampled_row.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
+            ax_row.set_title(f'行Attention\\n(该patch→图{i}) Max:{attention_map_row.max():.4f}', fontsize=9)
+            ax_row.axis('off')
             
-            # 叠加attention热图 - 🔥 提升热图质量
-            im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
-            ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.6f}', fontsize=10)
-            ax_attn.axis('off')
+            # 右侧：列attention
+            attention_map_col = attention_maps_col[i]
+            attention_upsampled_col = torch.nn.functional.interpolate(
+                attention_map_col.unsqueeze(0).unsqueeze(0),
+                size=(H, W), mode=interpolation_mode, align_corners=False
+            ).squeeze()
             
-            # 添加colorbar - 🔥 提升精度显示
-            cbar = plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
-            cbar.ax.tick_params(labelsize=8)  # 设置colorbar字体大小
+            ax_col = axes[attention_row_idx, col_offset + 1]
+            ax_col.imshow(img, alpha=0.7)
+            im_col = ax_col.imshow(attention_upsampled_col.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
+            ax_col.set_title(f'列Attention\\n(图{i}→该patch) Max:{attention_map_col.max():.4f}', fontsize=9)
+            ax_col.axis('off')
         
-        # 隐藏未使用的子图（如果图像数量少于3）
-        for col_idx in range(min(3, num_images), cols):
-            if cols > 1:
-                axes[0, col_idx].set_visible(False)
-                axes[1, col_idx].set_visible(False)
+        # 隐藏未使用的子图
+        total_used_images = num_images
+        total_possible_images = images_per_row if num_images <= 3 else 6
         
-        plt.suptitle(f'{attention_title} - {layer_name} (Images 0-{min(2, num_images-1)})\n{attention_desc}', fontsize=14, fontweight='bold')
+        for i in range(total_used_images, total_possible_images):
+            if i < images_per_row:
+                row_base = 0
+                col_offset = i * cols_per_image
+            else:
+                row_base = 2
+                col_offset = (i - images_per_row) * cols_per_image
+            
+            if row_base < fig_rows and col_offset < fig_cols:
+                axes[row_base, col_offset].set_visible(False)
+                axes[row_base, col_offset + 1].set_visible(False)
+                if row_base + 1 < fig_rows:
+                    axes[row_base + 1, col_offset].set_visible(False)
+                    axes[row_base + 1, col_offset + 1].set_visible(False)
+        
+        # 设置总标题
+        plt.suptitle(f'双向Attention对比 - {layer_name}\\n左：行Attention(该patch关注什么) | 右：列Attention(什么关注该patch)', 
+                    fontsize=12, fontweight='bold')
         plt.tight_layout()
         
-        # 如果有超过3张图像，需要创建第二个图来显示剩余的图像
-        if num_images > 3:
-            # 保存第一个图
-            buf1 = io.BytesIO()
-            plt.savefig(buf1, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
-            buf1.seek(0)
-            first_image = Image.open(buf1)
-            plt.close()
-            
-            # 创建第二个图显示图像3-5
-            remaining_images = num_images - 3
-            cols2 = min(3, remaining_images)
-            # 🔥 动态调整第二图尺寸
-            second_fig_width = cols2 * (6 if is_high_quality else 4)
-            second_fig_height = 12 if is_high_quality else 8
-            fig2, axes2 = plt.subplots(2, cols2, figsize=(second_fig_width, second_fig_height))
-            
-            if remaining_images == 1:
-                axes2 = axes2.reshape(2, 1)
-            elif cols2 == 1:
-                axes2 = axes2.reshape(2, 1)
-            
-            for i in range(3, num_images):
-                col_idx = i - 3
-                
-                # 上方显示原图 + source patch标记
-                ax_img = axes2[0, col_idx] if cols2 > 1 else axes2[0]
-                img = self.current_images[i].permute(1, 2, 0).cpu().numpy()
-                img = np.clip(img, 0, 1)
-                ax_img.imshow(img)
-                
-                # 如果是source图像，标记source patch
-                if i == source_img_idx:
-                    patch_y, patch_x = source_patch
-                    rect = patches.Rectangle(
-                        (patch_x * self.patch_size, patch_y * self.patch_size),
-                        self.patch_size, self.patch_size,
-                        linewidth=3, edgecolor='red', facecolor='none'
-                    )
-                    ax_img.add_patch(rect)
-                    ax_img.set_title(f'Source Image {i}\nPatch ({patch_y}, {patch_x})', color='red', fontweight='bold')
-                else:
-                    ax_img.set_title(f'Target Image {i}')
-                
-                ax_img.axis('off')
-                
-                # 下方显示attention热图
-                ax_attn = axes2[1, col_idx] if cols2 > 1 else axes2[1]
-                attention_map = attention_maps[i]
-                
-                # 上采样到原图尺寸 - 🔥 动态插值质量控制
-                interpolation_mode = 'bicubic' if is_high_quality else 'bilinear'
-                attention_upsampled = torch.nn.functional.interpolate(
-                    attention_map.unsqueeze(0).unsqueeze(0),
-                    size=(H, W), mode=interpolation_mode, align_corners=False
-                ).squeeze()
-                
-                # 显示原图作为背景
-                ax_attn.imshow(img, alpha=0.7)
-                
-                # 叠加attention热图 - 🔥 提升热图质量
-                im = ax_attn.imshow(attention_upsampled.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
-                ax_attn.set_title(f'Attention to Image {i}\nMax: {attention_map.max():.6f}', fontsize=10)
-                ax_attn.axis('off')
-                
-                # 添加colorbar - 🔥 提升精度显示
-                cbar = plt.colorbar(im, ax=ax_attn, fraction=0.046, pad=0.04)
-                cbar.ax.tick_params(labelsize=8)  # 设置colorbar字体大小
-            
-            # 隐藏未使用的子图
-            for col_idx in range(remaining_images, cols2):
-                if cols2 > 1:
-                    axes2[0, col_idx].set_visible(False)
-                    axes2[1, col_idx].set_visible(False)
-            
-            plt.suptitle(f'{attention_title} - {layer_name} (Images 3-{num_images-1})\n{attention_desc}', fontsize=14, fontweight='bold')
-            plt.tight_layout()
-            
-            # 保存第二个图
-            buf2 = io.BytesIO()
-            plt.savefig(buf2, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
-            buf2.seek(0)
-            second_image = Image.open(buf2)
-            plt.close()
-            
-            # 将两个图像垂直拼接
-            total_width = max(first_image.width, second_image.width)
-            total_height = first_image.height + second_image.height
-            
-            combined_image = Image.new('RGB', (total_width, total_height), 'white')
-            combined_image.paste(first_image, (0, 0))
-            combined_image.paste(second_image, (0, first_image.height))
-            
-            return combined_image
-        else:
-            # 只有3张或更少图像，直接返回
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=dpi_setting, bbox_inches='tight')  # 🔥 动态DPI设置
-            buf.seek(0)
-            plt.close()
-            
-            return Image.open(buf)
+        # 保存并返回图像
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=dpi_setting, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+        
+        return Image.open(buf)
+    
+    def visualize_patch_attention(self, patch_attention_data: Dict, attention_type: str = 'row') -> Image.Image:
+        """向后兼容的可视化函数 - 直接调用新的双向可视化"""
+        return self.visualize_patch_attention_dual(patch_attention_data)
     
     def on_canvas_click(self, event):
         """Canvas点击事件处理"""
@@ -527,21 +461,19 @@ class TkinterAttentionVisualizer:
     def _create_and_show_result(self, patch_attention_data: Dict, coord_info: Dict):
         """在主线程中创建双向attention可视化结果并显示"""
         try:
-            # 🔥 生成双向attention可视化结果
-            result_image_row = self.visualize_patch_attention(patch_attention_data, 'row')
-            result_image_col = self.visualize_patch_attention(patch_attention_data, 'col')
+            # 🔥 生成单窗口左右对比的双向attention可视化结果
+            result_image = self.visualize_patch_attention_dual(patch_attention_data)
             
-            if result_image_row is not None and result_image_col is not None:
-                # 显示两个窗口
-                self.show_result_window(result_image_row, coord_info, patch_attention_data, 'row')
-                self.show_result_window(result_image_col, coord_info, patch_attention_data, 'col')
+            if result_image is not None:
+                # 显示单个窗口（左右对比）
+                self.show_result_window(result_image, coord_info, patch_attention_data, 'dual')
                 
                 img_idx = coord_info['image_idx']
                 patch_x, patch_y = coord_info['patch_coords']
-                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的双向attention")
+                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的双向attention对比")
                 print(f"层: {patch_attention_data['layer_name']}")
-                print(f"   行attention窗口：显示该patch关注什么")
-                print(f"   列attention窗口：显示什么关注该patch")
+                print(f"   左侧：行attention（该patch关注什么）")
+                print(f"   右侧：列attention（什么关注该patch）")
             else:
                 self.info_label.config(text="❌ 生成可视化结果失败")
                 
@@ -565,7 +497,11 @@ class TkinterAttentionVisualizer:
         setattr(self, window_attr, result_window)
         
         # 设置窗口标题和位置
-        if attention_type == 'row':
+        if attention_type == 'dual':
+            result_window.title("🔍 双向Attention对比 - 左：该patch关注什么 | 右：什么关注该patch")
+            base_geometry = "1800x1200" if self._get_high_quality_mode() else "1200x800"
+            result_window.geometry(f"{base_geometry}+50+50")
+        elif attention_type == 'row':
             result_window.title("🔍 行Attention - 该patch关注什么")
             base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
             result_window.geometry(f"{base_geometry}+100+50")  # 左上位置
@@ -595,7 +531,10 @@ class TkinterAttentionVisualizer:
         img_idx = coord_info['image_idx']
         patch_x, patch_y = coord_info['patch_coords']
         
-        if attention_type == 'row':
+        if attention_type == 'dual':
+            attention_desc = "双向attention对比"
+            detail_desc = "左侧：该patch关注什么 | 右侧：什么关注该patch"
+        elif attention_type == 'row':
             attention_desc = "行attention（该patch关注什么）"
             detail_desc = "显示源patch对其他patch的关注程度"
         elif attention_type == 'col':
@@ -618,10 +557,17 @@ class TkinterAttentionVisualizer:
         
         # 显示结果图像
         # 调整图像大小以适应窗口 - 🔥 动态分辨率控制
-        if self._get_high_quality_mode():
-            max_width, max_height = 1400, 1000  # 高质量模式
+        if attention_type == 'dual':
+            # 双向对比需要更宽的显示区域
+            if self._get_high_quality_mode():
+                max_width, max_height = 1700, 1100  # 高质量模式 - 宽屏
+            else:
+                max_width, max_height = 1100, 700   # 标准模式 - 宽屏
         else:
-            max_width, max_height = 800, 600    # 标准模式
+            if self._get_high_quality_mode():
+                max_width, max_height = 1400, 1000  # 高质量模式
+            else:
+                max_width, max_height = 800, 600    # 标准模式
         result_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
         
         result_photo = ImageTk.PhotoImage(result_image)
@@ -631,7 +577,10 @@ class TkinterAttentionVisualizer:
         
         # 添加保存按钮
         def save_result():
-            type_suffix = f"_{attention_type}" if attention_type in ['row', 'col'] else ""
+            if attention_type == 'dual':
+                type_suffix = "_dual_comparison"
+            else:
+                type_suffix = f"_{attention_type}" if attention_type in ['row', 'col'] else ""
             filename = f"attention_result_img{img_idx}_patch{patch_y}_{patch_x}{type_suffix}.png"
             result_image.save(filename)
             messagebox.showinfo("保存成功", f"{attention_desc}结果已保存为 {filename}")

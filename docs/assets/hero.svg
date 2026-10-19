@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="380" viewBox="0 0 1280 380" role="img" aria-labelledby="title desc">
+<title id="title">VGGT Attention Explorer</title><desc id="desc">Follow a patch across views. Schematic of outgoing rows and incoming columns in an attention matrix.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1826"/><stop offset="1" stop-color="#173b48"/></linearGradient><pattern id="grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#7897a5" stroke-opacity=".24"/></pattern></defs>
+<rect width="1280" height="380" rx="20" fill="url(#bg)"/>
+<text x="58" y="64" fill="#69e1d3" font-family="system-ui,sans-serif" font-size="14" letter-spacing="4">MULTI-VIEW / PATCH-LEVEL / BIDIRECTIONAL</text>
+<text x="54" y="138" fill="#f2f7fa" font-family="system-ui,sans-serif" font-size="54" font-weight="700">VGGT</text>
+<text x="54" y="204" fill="#f2f7fa" font-family="system-ui,sans-serif" font-size="54" font-weight="700">Attention Explorer</text>
+<text x="58" y="255" fill="#b8cdd7" font-family="system-ui,sans-serif" font-size="21">Follow a patch. See what it attends to.</text>
+<text x="58" y="287" fill="#b8cdd7" font-family="system-ui,sans-serif" font-size="21">See which patches attend back.</text>
+<rect x="58" y="320" width="158" height="28" rx="14" fill="#23515b"/><text x="77" y="339" fill="#c6f4ed" font-family="system-ui,sans-serif" font-size="12">DESKTOP + CLI</text>
+<g transform="translate(825 56)"><rect x="0" y="0" width="250" height="250" rx="8" fill="#0d2634"/><rect x="0" y="100" width="250" height="25" fill="#45d6c0" opacity=".7"/><rect x="125" y="0" width="25" height="250" fill="#fcaa7d" opacity=".8"/><rect width="250" height="250" fill="url(#grid)"/><rect x="125" y="100" width="25" height="25" fill="#fff5d7"/><text x="0" y="278" fill="#88aebb" font-family="system-ui,sans-serif" font-size="12">ATTENTION MATRIX / SCHEMATIC</text><path d="M260 112h34" stroke="#69e1d3" stroke-width="2"/><text x="304" y="117" fill="#69e1d3" font-family="system-ui,sans-serif" font-size="13">outgoing</text><path d="M137 -8v-18" stroke="#fcaa7d" stroke-width="2"/><text x="160" y="-13" fill="#fcaa7d" font-family="system-ui,sans-serif" font-size="13">incoming</text></g>
+</svg>

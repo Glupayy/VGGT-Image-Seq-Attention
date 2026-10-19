@@ -14,24 +14,7 @@ from vggt.heads.camera_head import CameraHead
 from vggt.heads.dpt_head import DPTHead
 from vggt.heads.track_head import TrackHead
 
-# 导入attention缓存管理器
-try:
-    from attention_cache import get_attention_cache
-except ImportError:
-    # 如果导入失败，创建一个虚拟的缓存管理器
-    class DummyCache:
-        def enable_caching(self, *args, **kwargs):
-            pass
-        def get_all_cached_attention(self):
-            return {}
-        def clear_cache(self):
-            pass
-        def extract_patch_attention(self, *args, **kwargs):
-            return None
-        def start_new_run(self, *args, **kwargs):
-            pass
-    def get_attention_cache():
-        return DummyCache()
+from vggt.utils.attention_cache import AttentionCacheManager
 
 
 class VGGT(nn.Module, PyTorchModelHubMixin):
@@ -45,7 +28,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         self.track_head = TrackHead(dim_in=2 * embed_dim, patch_size=patch_size)
         
         # 初始化attention缓存管理器
-        self.attention_cache = get_attention_cache()
+        self.attention_cache = AttentionCacheManager()
         
         # 设置aggregator的缓存管理器引用
         self.aggregator.set_attention_cache_manager(self.attention_cache)
@@ -86,7 +69,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
 
         predictions = {}
 
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.autocast(device_type=images.device.type, enabled=False):
             if self.camera_head is not None:
                 pose_enc_list = self.camera_head(aggregated_tokens_list)
                 predictions["pose_enc"] = pose_enc_list[-1]  # pose encoding of the last iteration
@@ -119,26 +102,22 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
     
     # ==================== Attention缓存管理接口 ====================
     
-    def enable_attention_caching(self, target_layers: List[str] = None, max_heads: int = 8):
+    def enable_attention_caching(self, target_layers: List[str] = None,
+                                 max_heads: Optional[int] = None):
         """
         启用attention缓存用于可视化
         
         Args:
             target_layers: 要缓存的层名称列表，如['global_block_20', 'global_block_21']
-                          如果为None，则使用默认的后几层
-            max_heads: 最大缓存的attention heads数量，用于节省内存
+                          默认仅缓存global_block_23
+            max_heads: None averages all heads; a positive integer averages
+                       the first K heads. The cache stores this mean on CPU.
         """
-        if target_layers is None:
-            # 默认缓存最后几个global blocks
-            target_layers = ['global_block_20', 'global_block_21', 'global_block_22', 'global_block_23']
-        
         self.attention_cache.enable_caching(target_layers, max_heads)
-        print(f"✅ VGGT attention缓存已启用，目标层: {target_layers}")
     
     def disable_attention_caching(self):
         """禁用attention缓存"""
         self.attention_cache.disable_caching()
-        print("❌ VGGT attention缓存已禁用")
     
     def get_cached_attention(self) -> Dict[str, Any]:
         """
@@ -150,7 +129,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         return self.attention_cache.get_all_cached_attention()
     
     def extract_patch_attention(self, source_img_idx: int, patch_y: int, patch_x: int,
-                              layer_name: str = 'global_block_23') -> Optional[Dict[str, Any]]:
+                              layer_name: str = 'global_block_23',
+                              batch_idx: int = 0) -> Optional[Dict[str, Any]]:
         """
         从缓存中提取指定patch的attention数据（替代原hook方式）
         
@@ -163,7 +143,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             包含patch attention数据的字典，与原attn_util.extract_single_patch_attention_simple兼容
         """
         return self.attention_cache.extract_patch_attention(
-            source_img_idx, patch_y, patch_x, layer_name
+            source_img_idx, patch_y, patch_x, layer_name, batch_idx=batch_idx
         )
     
     def clear_attention_cache(self):

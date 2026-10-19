@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "installed_wheel_cli": {
+    "run_outside_source_checkout": true,
+    "official_checkpoint": true,
+    "max_abs_diff_vs_published_sample": {
+      "outgoing": 0.0,
+      "incoming": 0.0,
+      "images": 0.0
+    }
+  },
+  "native_tk_gui": {
+    "passed": true,
+    "render_size": [
+      2160,
+      1570
+    ],
+    "max_abs_diff": {
+      "outgoing": 0.0,
+      "incoming": 0.0
+    },
+    "flow": "native Tk event loop + background inference + canvas click + result window + full-size PNG"
+  }
+}

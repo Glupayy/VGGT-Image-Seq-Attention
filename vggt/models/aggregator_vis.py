@@ -15,12 +15,7 @@ from vggt.layers import PatchEmbed
 from vggt.layers.vision_transformer import vit_small, vit_base, vit_large, vit_giant2
 from vggt.layers.rope import RotaryPositionEmbedding2D, PositionGetter
 
-# 导入修改后的Block，其中包含attention缓存功能
-try:
-    from vggt.layers.block_vis import Block
-except ImportError:
-    # 如果没有block_vis，使用原始block
-    from vggt.layers.block import Block
+from vggt.layers.block_vis import Block
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +196,15 @@ class Aggregator(nn.Module):
                 The list of outputs from the attention blocks,
                 and the patch_start_idx indicating where patch tokens begin.
         """
+        if self.attention_cache_manager is not None:
+            # Invalidate before shape/channel checks and patch embedding: a
+            # failed forward must never leave the previous run's maps readable.
+            self.attention_cache_manager.invalidate_for_forward()
+        if images.ndim != 5:
+            raise ValueError("images must have shape [B, S, 3, H, W]")
         B, S, C_in, H, W = images.shape
+        if min(B, S, H, W) < 1:
+            raise ValueError("image batch, frame count, height and width must be nonzero")
 
         if C_in != 3:
             raise ValueError(f"Expected 3 input channels, got {C_in}")
@@ -229,7 +232,7 @@ class Aggregator(nn.Module):
         if self.rope is not None:
             pos = self.position_getter(B * S, H // self.patch_size, W // self.patch_size, device=images.device)
 
-        if self.patch_start_idx > 0:
+        if self.patch_start_idx > 0 and pos is not None:
             # do not use position embedding for special tokens (camera and register tokens)
             # so set pos to 0 for the special tokens
             pos = pos + 1
@@ -238,6 +241,20 @@ class Aggregator(nn.Module):
 
         # update P because we added special tokens
         _, P, C = tokens.shape
+
+        if self.attention_cache_manager is not None and self.attention_cache_manager.enabled:
+            if P != self.patch_start_idx + (H // self.patch_size) * (W // self.patch_size):
+                raise ValueError("patch embedding tokens do not match the input image grid")
+            available = {f"{kind}_block_{i}" for kind in ("frame", "global")
+                         for i in range(self.depth)}
+            unknown = set(self.attention_cache_manager.target_layers) - available
+            if unknown:
+                raise ValueError(f"unknown attention layer(s): {sorted(unknown)}")
+            self.attention_cache_manager.begin_forward(
+                batch_size=B, num_frames=S, patch_h=H // self.patch_size,
+                patch_w=W // self.patch_size, patch_size=self.patch_size,
+                patch_start_idx=self.patch_start_idx,
+            )
 
         frame_idx = 0
         global_idx = 0
@@ -334,7 +351,6 @@ class Aggregator(nn.Module):
                 block.attn._cache_manager = cache_manager
                 block.attn._layer_name = f'global_block_{i}'
         
-        print(f"✅ Aggregator已设置缓存管理器，涉及{len(self.frame_blocks)}个frame blocks和{len(self.global_blocks)}个global blocks")
 
 
 def slice_expand_and_flatten(token_tensor, B, S):

@@ -5,7 +5,7 @@
 3. 显示attention时，图片分辨率太低。
 
 为了高素质，高质量的完成这个项目，我对你的计划有以下建议：
-1. 你通读一下代码库，尤其是/Users/yaoyuanliang/Documents/github/vggt_attn/vggt这个文件夹下和attention相关的部分。对这个模型有个全面的了解。
+1. 你通读一下代码库，尤其是vggt/这个文件夹下和attention相关的部分。对这个模型有个全面的了解。
 2. 在了解之后，请你有规划，优雅的，解决我上面提出的严重问题。你要分清GUI层面的问题，还是提取权重并拆分的问题，要清晰的解决。
 3. 你可以在cache完global层的attention之后（cache时储存全部，这样模型只用跑一次），先做一步切分。因为这是一个全局的attention，形状会是[b,head,image_num*image_patch, image_num*image_patch], 你先找到需要关注的patch，也就是我鼠标点击的patch，然后提取出来这个patch的attention weight，并切成图片数量的attention map，最后可视化出来。你要严格严谨的做这些步骤，这需要你很精细的操作。
 4. 你做完一步之后，就输出你这一步的总结到这个request_attn.md文档里，这样我可以看你每一步，我们就能一起把这个事情做好。

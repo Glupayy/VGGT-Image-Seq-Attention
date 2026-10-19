@@ -151,3 +151,18 @@ skyseg.onnx
 # pixi environments
 .pixi
 *.egg-info
+
+# Local tooling, downloaded weights, and generated attention exports
+.DS_Store
+.vscode/
+.idea/
+.claude/
+.codex/
+*.safetensors
+*.pt
+*.pth
+outputs/
+validation-local/
+*.npz
+!docs/assets/bathroom-attention.npz
+*.tmp

@@ -43,7 +43,7 @@ class Block(nn.Module):
         attn_class: Callable[..., nn.Module] = Attention,
         ffn_layer: Callable[..., nn.Module] = Mlp,
         qk_norm: bool = False,
-        fused_attn: bool = False,  # use F.scaled_dot_product_attention or not
+        fused_attn: bool = True,  # use F.scaled_dot_product_attention or not
         rope=None,
     ) -> None:
         super().__init__()

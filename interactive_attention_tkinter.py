@@ -1,779 +1,537 @@
 #!/usr/bin/env python3
-"""
-基于Tkinter的VGGT交互式Attention可视化工具
-支持真正的鼠标点击获取坐标并显示attention结果
-避免OpenCV段错误问题
+"""Click image patches to explore VGGT's outgoing and incoming attention.
+
+Importing this module does not create a window, load a model, or download weights.
+Run ``python interactive_attention_tkinter.py --help`` for launch options.
 """
 
-import os
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from PIL import Image, ImageTk, ImageDraw, ImageFont
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import io
-from typing import Dict, List, Tuple, Optional
+from __future__ import annotations
+
+import argparse
+from contextlib import nullcontext
+import math
+from pathlib import Path
+import queue
+import re
+import sys
 import threading
+from typing import Dict, List, Optional
 
-# 导入VGGT相关模块（使用可视化版本）
-from vggt.models.vggt_vis import VGGT
-from vggt.utils.load_fn import load_and_preprocess_images
+import numpy as np
+from PIL import Image
 
-# 导入现有的attention工具（用于兼容性）
-from attn_util import pixel_to_patch_coords
 
 class TkinterAttentionVisualizer:
-    def __init__(self):
-        # 设备配置
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if torch.cuda.is_available():
-            self.dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-        else:
-            self.dtype = torch.float32
-        
-        # 存储当前状态
+    """A Tk front end whose worker threads never call the Tk interpreter.
+
+    Coordinate methods and image rendering can also be used without creating a
+    window. Coordinates refer to the preprocessed model images, not the original
+    files before resizing and cropping.
+    """
+
+    def __init__(
+        self,
+        model: str = "facebook/VGGT-1B",
+        device: str = "auto",
+        layer: str = "global_block_23",
+        max_heads: Optional[int] = None,
+    ):
+        if not re.fullmatch(r"global_block_(?:[0-9]|1[0-9]|2[0-3])", layer):
+            raise ValueError("layer must be global_block_0 through global_block_23")
+        if max_heads is not None and max_heads < 1:
+            raise ValueError("max_heads must be a positive integer or None")
+        self.model_id = model
+        self.requested_device = device
+        self.device = device
+        self.layer = layer
+        self.max_heads = max_heads
+        self.dtype = None
+        self.model = None
+        self.model_loaded = False
         self.current_images = None
         self.patch_size = 14
         self.grid_config = None
-        
-        # 🔥 分辨率控制选项 - 延迟初始化
-        self.high_quality_mode = None  # 将在create_gui中初始化
-        
-        # 🔥 移除hook相关变量
-        # self.current_attention_maps = None  # 现在通过模型缓存获取
-        # self.attention_hooks = []           # 不再需要hooks
-        
-        # GUI相关
-        self.root = None
-        self.canvas = None
         self.grid_image_pil = None
         self.grid_image_tk = None
-        self.info_label = None
-        self.result_window = None
-        
-        # 显示缩放信息
         self.display_scale_x = 1.0
         self.display_scale_y = 1.0
-        
-        # 初始化模型（延迟加载）
-        self.model = None
-        self.model_loaded = False
-        
-        print("🚀 初始化Tkinter可视化器...")
-    
+        self.display_offset_x = 0
+        self.display_offset_y = 0
+        self.high_quality_mode = None
+        self._high_quality = True
+        self.root = None
+        self.canvas = None
+        self.info_label = None
+        self.load_button = None
+        self.result_window = None
+        self._selected_patch = None
+        self._events = queue.Queue()
+        self._worker = None
+        self._busy = False
+        self._closing = threading.Event()
+        self.last_error = None
+        self._export_directory = Path.cwd()
+
     def _get_high_quality_mode(self):
-        """安全获取高质量模式状态"""
-        return self.high_quality_mode.get() if self.high_quality_mode is not None else True
-    
+        """Read a Python value so rendering workers never access a Tk variable."""
+        return self._high_quality
+
     def on_quality_mode_changed(self):
-        """分辨率模式改变时的回调函数"""
-        if self.high_quality_mode is None:
-            return
-        mode = "高分辨率" if self._get_high_quality_mode() else "标准分辨率"
-        print(f"🎨 分辨率模式已切换为: {mode}")
-        # 更新信息显示
-        if hasattr(self, 'info_label') and self.info_label:
-            current_text = self.info_label.cget('text')
-            if "模式:" not in current_text:
-                self.info_label.config(text=f"{current_text} | 当前模式: {mode}")
-    
-    def __del__(self):
-        """析构函数，清理资源"""
-        if hasattr(self, 'model') and self.model:
-            self.model.disable_attention_caching()
-            self.model.clear_attention_cache()
-    
+        self._high_quality = bool(self.high_quality_mode.get())
+
+    def _select_device(self):
+        import torch
+
+        device = self.requested_device
+        if device == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        resolved = torch.device(device)
+        if resolved.type not in {"cpu", "cuda"}:
+            raise ValueError("VGGT visualization supports CPU and CUDA devices")
+        if resolved.type == "cuda":
+            if not torch.cuda.is_available():
+                raise ValueError("CUDA was requested but is unavailable; use --device cpu")
+            major, _ = torch.cuda.get_device_capability(resolved)
+            self.dtype = torch.bfloat16 if major >= 8 else torch.float16
+        else:
+            self.dtype = torch.float32
+        self.device = str(resolved)
+        return resolved
+
     def load_model(self):
-        """延迟加载VGGT模型"""
-        if not self.model_loaded:
-            print("🚀 Loading VGGT model...")
-            self.model = VGGT.from_pretrained("VGGT-1B").to(self.device)
-            self.model.eval()
-            self.model_loaded = True
-            print("✅ Model loaded successfully!")
-    
-    # 🔥 移除整个setup_attention_hooks方法，不再需要！
-    # 现在直接使用模型内置的attention缓存系统
-    
-    def load_images(self, image_paths: List[str]):
-        """加载图像并运行模型"""
+        """Load weights only after the user explicitly selects input images."""
+        if self.model_loaded:
+            return
+        device = self._select_device()
+        from vggt.models.vggt_vis import VGGT
+
+        self.model = VGGT.from_pretrained(self.model_id, strict=True).to(device).eval()
+        self.patch_size = self.model.aggregator.patch_size
+        self.model_loaded = True
+
+    def load_images(self, image_paths: List[str]) -> bool:
+        """Preprocess one to six images and cache only the selected global block.
+
+        This method is also usable without a GUI. It updates Python state only;
+        the main thread is responsible for displaying the resulting image grid.
+        On failure the error is available as ``last_error`` and a new load may
+        be attempted without restarting the application.
+        """
         try:
-            # 确保模型已加载
+            if not 1 <= len(image_paths) <= 6:
+                raise ValueError("Select between 1 and 6 images")
+            for path in image_paths:
+                if not Path(path).is_file():
+                    raise FileNotFoundError(f"Image does not exist: {path}")
+            import torch
+            from vggt.utils.load_fn import load_and_preprocess_images
+
+            # Validate/decode inputs before downloading a potentially large model.
+            images = load_and_preprocess_images(image_paths)
+            self._events.put(("status", "Loading model weights (first use may download them)…"))
             self.load_model()
-            
-            print(f"📸 Loading {len(image_paths)} images...")
-            
-            # 加载和预处理图像
-            self.current_images = load_and_preprocess_images(image_paths).to(self.device)
-            print('loaded images ')
-            # 🔥 新的缓存系统：启用attention缓存
-            target_layers = ['global_block_20', 'global_block_21', 'global_block_22', 'global_block_23']
-            self.model.enable_attention_caching(target_layers)
+            self.model.enable_attention_caching([self.layer], max_heads=self.max_heads)
             self.model.start_new_attention_run()
-            
-            # 运行模型（只需一次！）
-            print("🔄 Running model with attention caching...")
-            with torch.no_grad():
-                if torch.cuda.is_available():
-                    with torch.amp.autocast('cuda', dtype=self.dtype):
-                        images_subset = self.current_images[:6] if self.current_images.shape[0] > 6 else self.current_images
-                        _ = self.model(images_subset)
-                        torch.cuda.empty_cache()
-                else:
-                    print('processing on CPU...')
-                    images_subset = self.current_images[:6] if self.current_images.shape[0] > 6 else self.current_images
-                    _ = self.model(images_subset)
-            
-            # 创建图像网格
-            self.create_image_grid(images_subset)
-            
-            # 获取缓存信息用于验证
-            cache_info = self.model.get_attention_cache_info()
-            cached_layers = cache_info.get('cached_layers', [])
-            
-            print(f"✅ 成功处理 {len(image_paths)} 张图像，缓存了 {len(cached_layers)} 个attention层: {cached_layers}")
+            self._events.put(("status", f"Computing {self.layer} attention on {self.device}…"))
+            device = torch.device(self.device)
+            autocast = (
+                torch.autocast(device_type="cuda", dtype=self.dtype)
+                if device.type == "cuda"
+                else nullcontext()
+            )
+            with torch.inference_mode(), autocast:
+                # The geometric prediction heads are unnecessary for attention.
+                features = self.model.aggregator(images.to(device).unsqueeze(0))
+                del features
+            cached = self.model.get_attention_cache_info().get("cached_layers", [])
+            if self.layer not in cached:
+                raise RuntimeError(f"No attention was cached for {self.layer}")
+            self.create_image_grid(images)
+            self.last_error = None
             return True
-            
-        except Exception as e:
-            print(f"❌ 加载图像时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            # 清理可能的缓存
-            if hasattr(self, 'model') and self.model:
+        except Exception as exc:
+            self.last_error = str(exc)
+            # A failed run must not leave an old grid paired with a new cache.
+            self.current_images = None
+            self.grid_config = None
+            self.grid_image_pil = None
+            if self.model is not None:
                 self.model.clear_attention_cache()
-            
             return False
-    
-    def create_image_grid(self, images: torch.Tensor):
-        """创建图像网格用于显示"""
-        S, C, H, W = images.shape
-        
-        # 计算网格尺寸
-        cols = min(3, S)
-        rows = (S + cols - 1) // cols
-        
-        # 存储网格配置信息
+
+    def create_image_grid(self, images):
+        """Create a display grid without interacting with Tk (safe in a worker)."""
+        if images.ndim != 4 or images.shape[1] != 3:
+            raise ValueError("Expected images with shape [views, 3, height, width]")
+        count, _, height, width = images.shape
+        if not 1 <= count <= 6:
+            raise ValueError("Select between 1 and 6 images")
+        if height < self.patch_size or width < self.patch_size:
+            raise ValueError("Images must contain at least one full patch")
+        # NumPy cannot convert bfloat16 tensors directly.
+        cpu_images = images.detach().float().cpu()
+        cols = min(3, count)
+        rows = math.ceil(count / cols)
+        grid = np.full((rows * height, cols * width, 3), 26, dtype=np.uint8)
+        for index, image in enumerate(cpu_images):
+            row, col = divmod(index, cols)
+            pixels = image.permute(1, 2, 0).clamp(0, 1).numpy()
+            grid[row * height : (row + 1) * height, col * width : (col + 1) * width] = (
+                pixels * 255
+            ).astype(np.uint8)
+        self.current_images = cpu_images
         self.grid_config = {
-            'num_images': S,
-            'cols': cols,
-            'rows': rows,
-            'image_height': H,
-            'image_width': W,
-            'patch_size': self.patch_size
+            "num_images": count,
+            "cols": cols,
+            "rows": rows,
+            "image_height": height,
+            "image_width": width,
+            "patch_size": self.patch_size,
         }
-        
-        # 创建网格图像
-        grid_h = rows * H
-        grid_w = cols * W
-        grid_array = np.zeros((grid_h, grid_w, 3), dtype=np.uint8)
-        
-        for i in range(S):
-            row, col = i // cols, i % cols
-            img = images[i].permute(1, 2, 0).cpu().numpy()
-            
-            # 转换到0-255范围
-            img = np.clip(img * 255, 0, 255).astype(np.uint8)
-            
-            start_h, end_h = row * H, (row + 1) * H
-            start_w, end_w = col * W, (col + 1) * W
-            
-            grid_array[start_h:end_h, start_w:end_w] = img
-        
-        # 转换为PIL图像
-        self.grid_image_pil = Image.fromarray(grid_array)
-        
-        # 更新Canvas显示
-        if self.canvas:
-            self.update_canvas_display()
-        
-        print(f"🖼️ 创建网格图像: {grid_array.shape}")
-    
-    def get_coordinate_info(self, x: int, y: int) -> Dict:
-        """根据坐标获取详细信息（修复了Canvas缩放问题）"""
+        self.grid_image_pil = Image.fromarray(grid)
+
+    def get_coordinate_info(self, x: float, y: float) -> Optional[Dict]:
+        """Map canvas coordinates to a model patch, including centered margins."""
         if self.grid_config is None:
             return None
-        
-        config = self.grid_config
-        
-        # 🔥 关键修复：将显示坐标映射回原始图像坐标
-        original_x = x / self.display_scale_x
-        original_y = y / self.display_scale_y
-        
-        # 确定点击的是哪个图像
-        col = int(original_x // config['image_width'])
-        row = int(original_y // config['image_height'])
-        img_idx = row * config['cols'] + col
-        
-        if img_idx >= config['num_images'] or col >= config['cols'] or row >= config['rows']:
+        if not math.isfinite(x) or not math.isfinite(y):
             return None
-        
-        # 计算在单个图像内的相对坐标
-        local_x = original_x % config['image_width']
-        local_y = original_y % config['image_height']
-        
-        # 计算patch坐标
-        patch_x = int(local_x // config['patch_size'])
-        patch_y = int(local_y // config['patch_size'])
-        
-        patch_h = config['image_height'] // config['patch_size']
-        patch_w = config['image_width'] // config['patch_size']
-        
+        if self.display_scale_x <= 0 or self.display_scale_y <= 0:
+            return None
+        original_x = (x - self.display_offset_x) / self.display_scale_x
+        original_y = (y - self.display_offset_y) / self.display_scale_y
+        config = self.grid_config
+        if not (
+            0 <= original_x < config["cols"] * config["image_width"]
+            and 0 <= original_y < config["rows"] * config["image_height"]
+        ):
+            return None
+        col = int(original_x // config["image_width"])
+        row = int(original_y // config["image_height"])
+        image_index = row * config["cols"] + col
+        if image_index >= config["num_images"]:
+            return None
+        local_x = original_x - col * config["image_width"]
+        local_y = original_y - row * config["image_height"]
+        patch_x = int(local_x // config["patch_size"])
+        patch_y = int(local_y // config["patch_size"])
+        patch_h = config["image_height"] // config["patch_size"]
+        patch_w = config["image_width"] // config["patch_size"]
         if patch_x >= patch_w or patch_y >= patch_h:
             return None
-        
         return {
-            'global_coords': (x, y),
-            'original_coords': (original_x, original_y),
-            'image_idx': img_idx,
-            'local_coords': (local_x, local_y),
-            'patch_coords': (patch_x, patch_y),
-            'patch_grid_size': (patch_h, patch_w),
-            'valid': True
+            "global_coords": (x, y),
+            "original_coords": (original_x, original_y),
+            "image_idx": image_index,
+            "local_coords": (local_x, local_y),
+            "patch_coords": (patch_x, patch_y),
+            "patch_grid_size": (patch_h, patch_w),
+            "valid": True,
         }
-    
-    def extract_patch_attention(self, img_idx: int, patch_y: int, patch_x: int, layer_name: str = 'global_block_23') -> Dict:
-        """提取指定patch的attention maps（使用新的缓存系统）"""
-        # 🔥 使用模型的缓存系统替代hook方式
-        return self.model.extract_patch_attention(img_idx, patch_y, patch_x, layer_name)
-    
-    def visualize_patch_attention_dual(self, patch_attention_data: Dict) -> Image.Image:
-        """可视化双向patch attention结果（左右对比）"""
+
+    def extract_patch_attention(self, img_idx, patch_y, patch_x, layer_name=None):
+        if self.model is None:
+            raise RuntimeError("Load images before extracting attention")
+        return self.model.extract_patch_attention(
+            img_idx, patch_y, patch_x, layer_name or self.layer
+        )
+
+    def visualize_patch_attention_dual(self, patch_attention_data: Dict) -> Optional[Image.Image]:
+        """Render both directions using the same scale for all views."""
         if patch_attention_data is None:
             return None
-        
-        source_img_idx = patch_attention_data['source_img_idx']
-        source_patch = patch_attention_data['source_patch']
-        layer_name = patch_attention_data['layer_name']
-        
-        # 🔥 获取双向attention maps
-        attention_maps_row = patch_attention_data['attention_maps_row']  # 该patch关注什么
-        attention_maps_col = patch_attention_data['attention_maps_col']  # 什么关注该patch
-        
-        S, C, H, W = self.current_images.shape
-        num_images = min(S, len(attention_maps_row))
-        
-        # 🔥 简化布局：左右对比，每个图像占两列（行attention + 列attention）
-        is_high_quality = self._get_high_quality_mode()
-        
-        # 计算布局参数
-        cols_per_image = 2  # 每张图像需要2列（左：行attention，右：列attention）
-        
-        if num_images <= 3:
-            # 对于少量图像，使用单行布局
-            fig_cols = num_images * cols_per_image
-            fig_rows = 2  # 原图 + attention对比
-            base_width = 4 if is_high_quality else 3
-            fig_width = fig_cols * base_width
-            fig_height = 8 if is_high_quality else 6
-        else:
-            # 对于多图像，分两行显示
-            fig_cols = 3 * cols_per_image  # 每行最多3张图像
-            fig_rows = 4  # 两套（原图 + attention对比）
-            base_width = 3.5 if is_high_quality else 2.5  
-            fig_width = fig_cols * base_width
-            fig_height = 12 if is_high_quality else 10
-        
-        dpi_setting = 300 if is_high_quality else 150
-        
-        # 创建子图
-        fig, axes = plt.subplots(fig_rows, fig_cols, figsize=(fig_width, fig_height))
-        if fig_rows == 1:
-            axes = axes.reshape(1, -1)
-        elif fig_cols == 1:
-            axes = axes.reshape(-1, 1)
-        
-        patch_y, patch_x = source_patch
-        
-        # 🔥 绘制左右对比的attention
-        images_per_row = min(3, num_images)
-        
-        for i in range(num_images):
-            if i < images_per_row:
-                # 第一行图像
-                row_base = 0
-                col_offset = i * cols_per_image
-            else:
-                # 第二行图像（如果有的话）
-                row_base = 2
-                col_offset = (i - images_per_row) * cols_per_image
-            
-            # 获取图像数据
-            img = self.current_images[i].permute(1, 2, 0).cpu().numpy()
-            img = np.clip(img, 0, 1)
-            
-            # 原图显示（跨越两列）
-            ax_orig_left = axes[row_base, col_offset]
-            ax_orig_right = axes[row_base, col_offset + 1]
-            
-            # 左侧原图标题
-            ax_orig_left.imshow(img)
-            if i == source_img_idx:
-                rect = patches.Rectangle(
-                    (patch_x * self.patch_size, patch_y * self.patch_size),
-                    self.patch_size, self.patch_size,
-                    linewidth=3, edgecolor='red', facecolor='none'
-                )
-                ax_orig_left.add_patch(rect)
-                ax_orig_left.set_title(f'Source Image {i}\\nPatch ({patch_y}, {patch_x})', color='red', fontweight='bold', fontsize=10)
-            else:
-                ax_orig_left.set_title(f'Target Image {i}', fontsize=10)
-            ax_orig_left.axis('off')
-            
-            # 右侧原图（用于对比）
-            ax_orig_right.imshow(img)
-            ax_orig_right.set_title(f'Target Image {i}', fontsize=10)
-            ax_orig_right.axis('off')
-            
-            # Attention显示
-            attention_row_idx = row_base + 1
-            
-            # 左侧：行attention
-            attention_map_row = attention_maps_row[i]
-            interpolation_mode = 'bicubic' if is_high_quality else 'bilinear'
-            attention_upsampled_row = torch.nn.functional.interpolate(
-                attention_map_row.unsqueeze(0).unsqueeze(0),
-                size=(H, W), mode=interpolation_mode, align_corners=False
-            ).squeeze()
-            
-            ax_row = axes[attention_row_idx, col_offset]
-            ax_row.imshow(img, alpha=0.7)
-            im_row = ax_row.imshow(attention_upsampled_row.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
-            ax_row.set_title(f'行Attention\\n(该patch→图{i}) Max:{attention_map_row.max():.4f}', fontsize=9)
-            ax_row.axis('off')
-            
-            # 右侧：列attention
-            attention_map_col = attention_maps_col[i]
-            attention_upsampled_col = torch.nn.functional.interpolate(
-                attention_map_col.unsqueeze(0).unsqueeze(0),
-                size=(H, W), mode=interpolation_mode, align_corners=False
-            ).squeeze()
-            
-            ax_col = axes[attention_row_idx, col_offset + 1]
-            ax_col.imshow(img, alpha=0.7)
-            im_col = ax_col.imshow(attention_upsampled_col.numpy(), alpha=0.85, cmap='hot', interpolation='bilinear')
-            ax_col.set_title(f'列Attention\\n(图{i}→该patch) Max:{attention_map_col.max():.4f}', fontsize=9)
-            ax_col.axis('off')
-        
-        # 隐藏未使用的子图
-        total_used_images = num_images
-        total_possible_images = images_per_row if num_images <= 3 else 6
-        
-        for i in range(total_used_images, total_possible_images):
-            if i < images_per_row:
-                row_base = 0
-                col_offset = i * cols_per_image
-            else:
-                row_base = 2
-                col_offset = (i - images_per_row) * cols_per_image
-            
-            if row_base < fig_rows and col_offset < fig_cols:
-                axes[row_base, col_offset].set_visible(False)
-                axes[row_base, col_offset + 1].set_visible(False)
-                if row_base + 1 < fig_rows:
-                    axes[row_base + 1, col_offset].set_visible(False)
-                    axes[row_base + 1, col_offset + 1].set_visible(False)
-        
-        # 设置总标题
-        plt.suptitle(f'双向Attention对比 - {layer_name}\\n左：行Attention(该patch关注什么) | 右：列Attention(什么关注该patch)', 
-                    fontsize=12, fontweight='bold')
-        plt.tight_layout()
-        
-        # 保存并返回图像
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=dpi_setting, bbox_inches='tight')
-        buf.seek(0)
-        plt.close()
-        
-        return Image.open(buf)
-    
-    def visualize_patch_attention(self, patch_attention_data: Dict, attention_type: str = 'row') -> Image.Image:
-        """向后兼容的可视化函数 - 直接调用新的双向可视化"""
+        if self.current_images is None:
+            raise RuntimeError("Load images before rendering attention")
+        from vggt.visualization import render_attention_comparison
+
+        return render_attention_comparison(
+            self.current_images,
+            patch_attention_data,
+            patch_size=self.patch_size,
+            dpi=200 if self._get_high_quality_mode() else 100,
+            shared_scale=True,
+        )
+
+    def visualize_patch_attention(self, patch_attention_data: Dict, attention_type="row"):
+        """Compatibility alias; results always compare both attention directions."""
         return self.visualize_patch_attention_dual(patch_attention_data)
-    
-    def on_canvas_click(self, event):
-        """Canvas点击事件处理"""
-        if self.grid_config is None:
-            return
-        
-        x, y = event.x, event.y
-        
-        # 获取坐标信息
-        coord_info = self.get_coordinate_info(x, y)
-        
-        if coord_info and coord_info['valid']:
-            print(f"🎯 点击坐标: ({x}, {y})")
-            print(f"🎯 图像索引: {coord_info['image_idx']}")
-            print(f"🎯 Patch坐标: {coord_info['patch_coords']}")
-            
-            # 更新信息显示
-            info_text = f"点击坐标: ({x}, {y}) | 图像: {coord_info['image_idx']} | Patch: {coord_info['patch_coords']} | 正在分析attention..."
-            self.info_label.config(text=info_text)
-            
-            # 在新线程中处理attention分析，避免界面卡死
-            threading.Thread(target=self.show_attention_for_click, args=(coord_info,), daemon=True).start()
-    
-    def on_canvas_motion(self, event):
-        """Canvas鼠标移动事件处理"""
-        if self.grid_config is None:
-            return
-        
-        x, y = event.x, event.y
-        
-        # 获取坐标信息
-        coord_info = self.get_coordinate_info(x, y)
-        
-        if coord_info and coord_info['valid']:
-            orig_x, orig_y = coord_info['original_coords']
-            info_text = f"显示坐标: ({x}, {y}) | 原始坐标: ({orig_x:.1f}, {orig_y:.1f}) | 图像: {coord_info['image_idx']} | Patch: {coord_info['patch_coords']} | 点击分析attention"
+
+    def _set_busy(self, busy, message=None):
+        self._busy = busy
+        self.load_button.configure(state="disabled" if busy else "normal")
+        if busy:
+            self.progress.start(12)
         else:
-            info_text = f"坐标: ({x}, {y}) | 无效区域"
-        
-        self.info_label.config(text=info_text)
-    
-    def show_attention_for_click(self, coord_info: Dict):
-        """显示点击位置的attention结果"""
-        img_idx = coord_info['image_idx']
-        patch_x, patch_y = coord_info['patch_coords']
-        
+            self.progress.stop()
+        if message:
+            self.info_label.configure(text=message)
+
+    def _start_worker(self, target, args=()):
+        self._worker = threading.Thread(target=self._worker_task, args=(target, args), daemon=True)
+        self._worker.start()
+
+    def _worker_task(self, target, args):
         try:
-            print(f"🔄 正在提取图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的attention...")
-            
-            # 提取patch attention
-            patch_attention_data = self.extract_patch_attention(img_idx, patch_y, patch_x)
-            
-            if patch_attention_data is None:
-                print("❌ 无法提取attention数据")
-                self.root.after(0, lambda: self.info_label.config(text="❌ 无法提取attention数据"))
-                return
-            
-            # 在主线程中生成可视化结果和显示
-            self.root.after(0, self._create_and_show_result, patch_attention_data, coord_info)
-            
-        except Exception as e:
-            print(f"❌ 分析attention时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            self.root.after(0, lambda: self.info_label.config(text=f"❌ 分析attention时出错: {e}"))
-    
-    def _create_and_show_result(self, patch_attention_data: Dict, coord_info: Dict):
-        """在主线程中创建双向attention可视化结果并显示"""
-        try:
-            # 🔥 生成单窗口左右对比的双向attention可视化结果
-            result_image = self.visualize_patch_attention_dual(patch_attention_data)
-            
-            if result_image is not None:
-                # 显示单个窗口（左右对比）
-                self.show_result_window(result_image, coord_info, patch_attention_data, 'dual')
-                
-                img_idx = coord_info['image_idx']
-                patch_x, patch_y = coord_info['patch_coords']
-                print(f"✅ 成功显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的双向attention对比")
-                print(f"层: {patch_attention_data['layer_name']}")
-                print(f"   左侧：行attention（该patch关注什么）")
-                print(f"   右侧：列attention（什么关注该patch）")
-            else:
-                self.info_label.config(text="❌ 生成可视化结果失败")
-                
-        except Exception as e:
-            print(f"❌ 创建可视化结果时出错: {e}")
-            import traceback
-            traceback.print_exc()
-            self.info_label.config(text=f"❌ 创建可视化结果时出错: {e}")
-    
-    def show_result_window(self, result_image: Image.Image, coord_info: Dict, patch_attention_data: Dict, attention_type: str = 'row'):
-        """显示结果窗口"""
-        # 🔥 支持多窗口显示 - 为不同类型的attention创建独立窗口
-        window_attr = f'result_window_{attention_type}'
-        
-        # 关闭之前同类型的结果窗口
-        if hasattr(self, window_attr) and getattr(self, window_attr):
-            getattr(self, window_attr).destroy()
-        
-        # 🔥 创建新的结果窗口 - 支持多窗口显示
-        result_window = tk.Toplevel(self.root)
-        setattr(self, window_attr, result_window)
-        
-        # 设置窗口标题和位置
-        if attention_type == 'dual':
-            result_window.title("🔍 双向Attention对比 - 左：该patch关注什么 | 右：什么关注该patch")
-            base_geometry = "1800x1200" if self._get_high_quality_mode() else "1200x800"
-            result_window.geometry(f"{base_geometry}+50+50")
-        elif attention_type == 'row':
-            result_window.title("🔍 行Attention - 该patch关注什么")
-            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
-            result_window.geometry(f"{base_geometry}+100+50")  # 左上位置
-        elif attention_type == 'col':
-            result_window.title("🔍 列Attention - 什么关注该patch")
-            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
-            result_window.geometry(f"{base_geometry}+150+100")  # 稍微偏移避免重叠
-        else:
-            result_window.title("🔍 Attention可视化结果")
-            base_geometry = "1500x1100" if self._get_high_quality_mode() else "900x700"
-            result_window.geometry(base_geometry)
-        
-        # 创建滚动框架
-        canvas = tk.Canvas(result_window)
-        scrollbar = ttk.Scrollbar(result_window, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # 🔥 显示不同类型attention的信息
-        img_idx = coord_info['image_idx']
-        patch_x, patch_y = coord_info['patch_coords']
-        
-        if attention_type == 'dual':
-            attention_desc = "双向attention对比"
-            detail_desc = "左侧：该patch关注什么 | 右侧：什么关注该patch"
-        elif attention_type == 'row':
-            attention_desc = "行attention（该patch关注什么）"
-            detail_desc = "显示源patch对其他patch的关注程度"
-        elif attention_type == 'col':
-            attention_desc = "列attention（什么关注该patch）"
-            detail_desc = "显示其他patch对源patch的关注程度"
-        else:
-            attention_desc = "Attention"
-            detail_desc = "Attention分析结果"
-        
-        info_text = f"""
-✅ 成功分析图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的{attention_desc}
-类型: {detail_desc}
-全局坐标: {coord_info['global_coords']}
-局部坐标: {coord_info['local_coords']}
-层: {patch_attention_data['layer_name']}
-        """
-        
-        info_label = ttk.Label(scrollable_frame, text=info_text, font=("Arial", 12))
-        info_label.pack(pady=10)
-        
-        # 显示结果图像
-        # 调整图像大小以适应窗口 - 🔥 动态分辨率控制
-        if attention_type == 'dual':
-            # 双向对比需要更宽的显示区域
-            if self._get_high_quality_mode():
-                max_width, max_height = 1700, 1100  # 高质量模式 - 宽屏
-            else:
-                max_width, max_height = 1100, 700   # 标准模式 - 宽屏
-        else:
-            if self._get_high_quality_mode():
-                max_width, max_height = 1400, 1000  # 高质量模式
-            else:
-                max_width, max_height = 800, 600    # 标准模式
-        result_image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
-        
-        result_photo = ImageTk.PhotoImage(result_image)
-        result_label = ttk.Label(scrollable_frame, image=result_photo)
-        result_label.image = result_photo  # 保持引用
-        result_label.pack(pady=10)
-        
-        # 添加保存按钮
-        def save_result():
-            if attention_type == 'dual':
-                type_suffix = "_dual_comparison"
-            else:
-                type_suffix = f"_{attention_type}" if attention_type in ['row', 'col'] else ""
-            filename = f"attention_result_img{img_idx}_patch{patch_y}_{patch_x}{type_suffix}.png"
-            result_image.save(filename)
-            messagebox.showinfo("保存成功", f"{attention_desc}结果已保存为 {filename}")
-        
-        save_btn = ttk.Button(scrollable_frame, text="保存结果", command=save_result)
-        save_btn.pack(pady=5)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        # 更新主窗口信息
-        self.info_label.config(text=f"✅ 已显示图像 {img_idx} 中patch ({patch_y}, {patch_x}) 的{attention_desc}结果")
-    
-    def update_canvas_display(self):
-        """更新Canvas显示（记录缩放信息）"""
-        if self.grid_image_pil and self.canvas:
-            # 调整图像大小以适应canvas
-            canvas_width = self.canvas.winfo_width()
-            canvas_height = self.canvas.winfo_height()
-            
-            if canvas_width > 1 and canvas_height > 1:  # 确保canvas已经初始化
-                # 保持宽高比缩放
-                img_ratio = self.grid_image_pil.width / self.grid_image_pil.height
-                canvas_ratio = canvas_width / canvas_height
-                
-                if img_ratio > canvas_ratio:
-                    # 图像更宽，以宽度为准
-                    new_width = canvas_width
-                    new_height = int(canvas_width / img_ratio)
-                else:
-                    # 图像更高，以高度为准
-                    new_height = canvas_height
-                    new_width = int(canvas_height * img_ratio)
-                
-                # 🔥 记录缩放比例
-                self.display_scale_x = new_width / self.grid_image_pil.width
-                self.display_scale_y = new_height / self.grid_image_pil.height
-                
-                print(f"🔍 Canvas缩放信息: 原始({self.grid_image_pil.width}x{self.grid_image_pil.height}) → 显示({new_width}x{new_height})")
-                print(f"🔍 缩放比例: x={self.display_scale_x:.4f}, y={self.display_scale_y:.4f}")
-                
-                # 调整图像大小
-                resized_image = self.grid_image_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
-                self.grid_image_tk = ImageTk.PhotoImage(resized_image)
-                
-                # 清除canvas并显示图像
-                self.canvas.delete("all")
-                self.canvas.create_image(canvas_width//2, canvas_height//2, image=self.grid_image_tk)
-    
-    def load_images_dialog(self):
-        """打开文件对话框选择图像"""
-        file_paths = filedialog.askopenfilenames(
-            title="选择图像文件",
-            filetypes=[
-                ("图像文件", "*.jpg *.jpeg *.png *.bmp *.tiff"),
-                ("所有文件", "*.*")
-            ]
-        )
-        
-        if len(file_paths) < 2:
-            messagebox.showwarning("警告", "请至少选择2张图像")
-            return
-        
-        if len(file_paths) > 6:
-            messagebox.showinfo("提示", "最多支持6张图像，将使用前6张")
-            file_paths = file_paths[:6]
-        
-        # 在新线程中加载图像，避免界面卡死
-        self.info_label.config(text="正在加载图像...")
-        threading.Thread(target=self.load_images_thread, args=(file_paths,), daemon=True).start()
-    
+            target(*args)
+        except Exception as exc:
+            self._events.put(("error", str(exc)))
+        finally:
+            if self._closing.is_set():
+                self._release_cache()
+
     def load_images_thread(self, file_paths):
-        """在线程中加载图像"""
         success = self.load_images(file_paths)
-        
-        if success:
-            self.root.after(0, lambda: self.info_label.config(text=f"✅ 成功加载 {len(file_paths)} 张图像，点击图像查看attention"))
-        else:
-            self.root.after(0, lambda: self.info_label.config(text="❌ 加载图像失败"))
-    
-    def create_gui(self):
-        """创建GUI界面"""
-        self.root = tk.Tk()
-        self.root.title("VGGT Interactive Attention Visualizer")
-        self.root.geometry("1300x900")  # 🔥 提升主窗口尺寸：1000x700→1300x900
-        
-        # 🔥 现在可以安全地初始化tkinter变量
-        self.high_quality_mode = tk.BooleanVar(value=True)  # 默认启用高质量模式
-        
-        # 创建主框架
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        # 顶部控制面板
-        control_frame = ttk.Frame(main_frame)
-        control_frame.pack(fill="x", pady=(0, 10))
-        
-        ttk.Label(control_frame, text="🔍 VGGT Interactive Attention Visualizer", 
-                 font=("Arial", 16, "bold")).pack(side="left")
-        
-        # 🔥 添加分辨率控制选项
-        quality_frame = ttk.Frame(control_frame)
-        quality_frame.pack(side="right", padx=(10, 0))
-        
-        quality_checkbox = ttk.Checkbutton(
-            quality_frame, 
-            text="高分辨率模式", 
-            variable=self.high_quality_mode,
-            command=self.on_quality_mode_changed
+        self._events.put(("loaded", len(file_paths)) if success else ("error", self.last_error))
+
+    def show_attention_for_click(self, coord_info: Dict):
+        """Extract and render in a worker; communicate only through a Queue."""
+        patch_x, patch_y = coord_info["patch_coords"]
+        data = self.extract_patch_attention(coord_info["image_idx"], patch_y, patch_x)
+        if data is None:
+            raise RuntimeError("The selected patch has no cached attention; load the images again")
+        result = self.visualize_patch_attention_dual(data)
+        self._events.put(("attention", (result, coord_info, data)))
+
+    def _drain_events(self):
+        """Only the main thread calls this function or schedules Tk callbacks."""
+        if self._closing.is_set():
+            return
+        try:
+            while True:
+                event, payload = self._events.get_nowait()
+                if event == "status":
+                    self.info_label.configure(text=payload)
+                elif event == "loaded":
+                    self._selected_patch = None
+                    self.update_canvas_display()
+                    self._set_busy(False, f"{payload} view(s) ready · Click a patch to compare attention")
+                elif event == "attention":
+                    result, coordinate, data = payload
+                    self.show_result_window(result, coordinate, data, "dual")
+                    self._set_busy(False, "Attention ready · Save the full-resolution PNG from the result window")
+                elif event == "error":
+                    if self.grid_image_pil is None:
+                        self.canvas.delete("all")
+                    self._set_busy(False, f"Could not complete the operation: {payload}")
+                    self.messagebox.showerror("Attention visualization", payload, parent=self.root)
+        except queue.Empty:
+            pass
+        except Exception as exc:
+            self._set_busy(False, f"Could not display the result: {exc}")
+            self.messagebox.showerror("Attention visualization", str(exc), parent=self.root)
+        self.root.after(60, self._drain_events)
+
+    def on_canvas_click(self, event):
+        if self._busy:
+            return
+        coordinate = self.get_coordinate_info(event.x, event.y)
+        if coordinate is None:
+            return
+        self._selected_patch = coordinate
+        self._draw_selection()
+        patch_x, patch_y = coordinate["patch_coords"]
+        self._set_busy(
+            True,
+            f"Rendering {self.layer} · View {coordinate['image_idx']} · Patch (row {patch_y}, col {patch_x})…",
         )
-        quality_checkbox.pack(side="top")
-        
-        load_btn = ttk.Button(quality_frame, text="📁 加载图像", command=self.load_images_dialog)
-        load_btn.pack(side="bottom", pady=(5, 0))
-        
-        # 信息显示区域
-        self.info_label = ttk.Label(main_frame, text="请点击'加载图像'按钮选择2-6张图像文件", 
-                                   font=("Arial", 12))
-        self.info_label.pack(fill="x", pady=(0, 10))
-        
-        # 图像显示区域
-        canvas_frame = ttk.Frame(main_frame)
-        canvas_frame.pack(fill="both", expand=True)
-        
-        self.canvas = tk.Canvas(canvas_frame, bg="white", cursor="crosshair")
+        self._start_worker(self.show_attention_for_click, (coordinate,))
+
+    def on_canvas_motion(self, event):
+        if self._busy:
+            return
+        coordinate = self.get_coordinate_info(event.x, event.y)
+        if coordinate:
+            patch_x, patch_y = coordinate["patch_coords"]
+            self.info_label.configure(
+                text=f"View {coordinate['image_idx']} · Patch (row {patch_y}, col {patch_x}) · Click to inspect"
+            )
+
+    def _draw_selection(self):
+        self.canvas.delete("selection")
+        if self._selected_patch is None or self.grid_config is None:
+            return
+        row, col = divmod(self._selected_patch["image_idx"], self.grid_config["cols"])
+        patch_x, patch_y = self._selected_patch["patch_coords"]
+        x = col * self.grid_config["image_width"] + patch_x * self.patch_size
+        y = row * self.grid_config["image_height"] + patch_y * self.patch_size
+        self.canvas.create_rectangle(
+            self.display_offset_x + x * self.display_scale_x,
+            self.display_offset_y + y * self.display_scale_y,
+            self.display_offset_x + (x + self.patch_size) * self.display_scale_x,
+            self.display_offset_y + (y + self.patch_size) * self.display_scale_y,
+            outline="#38bdf8", width=2, tags="selection",
+        )
+
+    def update_canvas_display(self):
+        if self.canvas is None or self.grid_image_pil is None:
+            return
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if min(width, height) <= 1:
+            return
+        scale = min(width / self.grid_image_pil.width, height / self.grid_image_pil.height)
+        new_width = max(1, round(self.grid_image_pil.width * scale))
+        new_height = max(1, round(self.grid_image_pil.height * scale))
+        self.display_scale_x = new_width / self.grid_image_pil.width
+        self.display_scale_y = new_height / self.grid_image_pil.height
+        self.display_offset_x = (width - new_width) // 2
+        self.display_offset_y = (height - new_height) // 2
+        preview = self.grid_image_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        self.grid_image_tk = self.ImageTk.PhotoImage(preview, master=self.root)
+        self.canvas.delete("all")
+        self.canvas.create_image(
+            self.display_offset_x, self.display_offset_y,
+            image=self.grid_image_tk, anchor="nw",
+        )
+        config = self.grid_config
+        for index in range(config["num_images"]):
+            row, col = divmod(index, config["cols"])
+            x = self.display_offset_x + col * config["image_width"] * self.display_scale_x + 10
+            y = self.display_offset_y + row * config["image_height"] * self.display_scale_y + 10
+            tag = f"view-label-{index}"
+            self.canvas.create_text(x, y, text=f"View {index}", anchor="nw", fill="white", font=("Arial", 11, "bold"), tags=tag)
+            bounds = self.canvas.bbox(tag)
+            background = self.canvas.create_rectangle(bounds[0] - 4, bounds[1] - 2, bounds[2] + 4, bounds[3] + 2, fill="#172033", outline="")
+            self.canvas.tag_lower(background, tag)
+        self._draw_selection()
+
+    def load_images_dialog(self):
+        paths = self.filedialog.askopenfilenames(
+            parent=self.root, title="Select 1–6 views of a scene",
+            filetypes=[("Images", "*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"), ("All files", "*")],
+        )
+        if not paths:
+            return
+        if len(paths) > 6:
+            self.messagebox.showwarning("Select up to 6 views", "Choose between 1 and 6 images for one attention run.", parent=self.root)
+            return
+        self._set_busy(True, "Preparing images…")
+        self._start_worker(self.load_images_thread, (list(paths),))
+
+    def show_result_window(self, result_image, coord_info, patch_attention_data, attention_type="dual"):
+        if result_image is None:
+            raise ValueError("The renderer did not return an image")
+        if self.result_window is not None and self.result_window.winfo_exists():
+            self.result_window.destroy()
+        window = self.tk.Toplevel(self.root)
+        self.result_window = window
+        window.title("VGGT · Bidirectional attention")
+        window.geometry("1200x850")
+        frame = self.ttk.Frame(window, padding=18)
+        frame.pack(fill="both", expand=True)
+        patch_x, patch_y = coord_info["patch_coords"]
+        self.ttk.Label(frame, text=f"View {coord_info['image_idx']} · Patch (row {patch_y}, col {patch_x}) · {patch_attention_data['layer_name']}", font=("Arial", 13, "bold")).pack(anchor="w")
+        self.ttk.Label(frame, text="Outgoing: what this patch attends to. Incoming: which patches attend to it.").pack(anchor="w", pady=(6, 12))
+        preview_label = self.ttk.Label(frame)
+        preview_label.pack(fill="both", expand=True)
+        # Keep the renderer's full-resolution image intact for export.
+        def resize_preview(event):
+            if event.width <= 1 or event.height <= 1:
+                return
+            preview = result_image.copy()
+            preview.thumbnail((event.width, event.height), Image.Resampling.LANCZOS)
+            photo = self.ImageTk.PhotoImage(preview, master=window)
+            preview_label.configure(image=photo)
+            preview_label.image = photo
+
+        preview_label.bind("<Configure>", resize_preview)
+
+        def save_result():
+            filename = f"attention_view{coord_info['image_idx']}_patch{patch_y}_{patch_x}_{self.layer}.png"
+            path = self.filedialog.asksaveasfilename(
+                parent=window, title="Export full-resolution attention", initialdir=str(self._export_directory),
+                initialfile=filename, defaultextension=".png", filetypes=[("PNG image", "*.png")],
+            )
+            if not path:
+                return
+            try:
+                result_image.save(path, format="PNG")
+                self._export_directory = Path(path).parent
+                self.info_label.configure(text=f"Saved full-resolution attention to {path}")
+            except (OSError, ValueError) as exc:
+                self.messagebox.showerror("Export failed", str(exc), parent=window)
+
+        self.ttk.Button(frame, text="Save full-resolution PNG…", command=save_result).pack(anchor="e", pady=(12, 0))
+
+    def _release_cache(self):
+        if self.model is not None:
+            self.model.disable_attention_caching()
+            self.model.clear_attention_cache()
+
+    def _close(self):
+        self._closing.set()
+        self.root.destroy()
+
+    def create_gui(self):
+        import tkinter as tk
+        from tkinter import filedialog, messagebox, ttk
+        from PIL import ImageTk
+
+        self.tk, self.ttk, self.filedialog, self.messagebox, self.ImageTk = tk, ttk, filedialog, messagebox, ImageTk
+        self.root = tk.Tk()
+        self.root.title("VGGT Attention Explorer")
+        self.root.geometry("1280x880")
+        self.root.minsize(760, 560)
+        self.root.protocol("WM_DELETE_WINDOW", self._close)
+        self.high_quality_mode = tk.BooleanVar(master=self.root, value=self._high_quality)
+        main = ttk.Frame(self.root, padding=20)
+        main.pack(fill="both", expand=True)
+        toolbar = ttk.Frame(main)
+        toolbar.pack(fill="x")
+        heading = ttk.Frame(toolbar)
+        heading.pack(side="left")
+        ttk.Label(heading, text="VGGT Attention Explorer", font=("Arial", 20, "bold")).pack(anchor="w")
+        heads = "all heads" if self.max_heads is None else f"first {self.max_heads} heads"
+        ttk.Label(heading, text=f"{self.model_id} · {self.layer} · {heads} · {self.requested_device}").pack(anchor="w", pady=(4, 0))
+        controls = ttk.Frame(toolbar)
+        controls.pack(side="right")
+        self.load_button = ttk.Button(controls, text="Open 1–6 images…", command=self.load_images_dialog)
+        self.load_button.pack(anchor="e")
+        ttk.Checkbutton(controls, text="High-resolution export", variable=self.high_quality_mode, command=self.on_quality_mode_changed).pack(anchor="e", pady=(6, 0))
+        ttk.Separator(main).pack(fill="x", pady=14)
+        self.info_label = ttk.Label(main, text="Open scene views, then click an image patch to compare attention.", wraplength=1100)
+        self.info_label.pack(fill="x", pady=(0, 8))
+        self.progress = ttk.Progressbar(main, mode="indeterminate")
+        self.progress.pack(fill="x", pady=(0, 12))
+        self.canvas = tk.Canvas(main, background="#1a1f2b", highlightthickness=0, cursor="crosshair")
         self.canvas.pack(fill="both", expand=True)
-        
-        # 绑定事件
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<Motion>", self.on_canvas_motion)
-        self.canvas.bind("<Configure>", lambda e: self.update_canvas_display())
-        
-        # 底部说明
-        help_text = """
-🎯 操作说明：
-• 移动鼠标查看实时坐标和patch信息
-• 点击任意位置分析该patch的双向attention（将打开两个窗口）
-  - 🔍 行Attention窗口：显示该patch关注什么（源→目标）
-  - 🔍 列Attention窗口：显示什么关注该patch（目标→源）
-• 支持2-6张图像的多视图attention分析
-• 高分辨率模式：生成更大更清晰的attention可视化图像（默认启用）
-        """
-        
-        help_label = ttk.Label(main_frame, text=help_text, font=("Arial", 10), 
-                              foreground="gray")
-        help_label.pack(fill="x", pady=(10, 0))
-        
-        # 检查是否有现成的图像可以加载
-        self.check_existing_images()
+        self.canvas.bind("<Configure>", lambda event: self.update_canvas_display())
+        ttk.Label(main, text="Patch coordinates use the resized / cropped model input. Both attention directions share one color scale.\nWeights are loaded on the first image run; later clicks reuse the cached attention.", foreground="#687386", wraplength=1100).pack(anchor="w", pady=(12, 0))
+        self.root.after(60, self._drain_events)
 
-    def check_existing_images(self):
-        """检查是否有现成的图像可以自动加载"""
-        # 检查temp_images目录
-        temp_dir = "temp_images"
-        if os.path.exists(temp_dir):
-            temp_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir) 
-                         if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
-            if len(temp_files) >= 2:
-                self.info_label.config(text=f"发现temp_images中有{len(temp_files)}张图像，正在自动加载...")
-                threading.Thread(target=self.load_images_thread, args=(temp_files[:6],), daemon=True).start()
-                return
-        
-        # 检查extracted_frames目录
-        extracted_dir = "extracted_frames"
-        if os.path.exists(extracted_dir):
-            frame_files = sorted([os.path.join(extracted_dir, f) for f in os.listdir(extracted_dir) 
-                                if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))])
-            if len(frame_files) >= 2:
-                self.info_label.config(text=f"发现extracted_frames中有{len(frame_files)}张图像，正在自动加载...")
-                threading.Thread(target=self.load_images_thread, args=(frame_files[:6],), daemon=True).start()
-                return
-    
     def run(self):
-        """运行GUI"""
         try:
-            print("🚀 启动基于Tkinter的VGGT交互式Attention可视化器")
             self.create_gui()
             self.root.mainloop()
-        except Exception as e:
-            print(f"❌ GUI运行出错: {e}")
-            import traceback
-            traceback.print_exc()
         finally:
-            # 确保清理资源
-            if hasattr(self, 'model') and self.model:
-                self.model.disable_attention_caching()
-                self.model.clear_attention_cache()
-                print("🗑️ 已清理attention缓存资源")
+            self._closing.set()
+            if self._worker is None or not self._worker.is_alive():
+                self._release_cache()
 
-def main():
-    """主函数"""
-    visualizer = TkinterAttentionVisualizer()
-    visualizer.run()
+
+def build_parser():
+    parser = argparse.ArgumentParser(description="Explore VGGT patch attention in a desktop window. Model weights are loaded only after selecting 1–6 images.")
+    parser.add_argument("--model", default="facebook/VGGT-1B", help="Hugging Face model ID or local pretrained model directory")
+    parser.add_argument("--device", default="auto", help="auto (CUDA when available), cpu, cuda, or cuda:N")
+    parser.add_argument("--layer", default="global_block_23", help="global_block_0 through global_block_23 (default: %(default)s)")
+    parser.add_argument("--max-heads", type=int, default=None, help="cache only the first K heads (default: all heads)")
+    return parser
+
+
+def main(argv=None):
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        visualizer = TkinterAttentionVisualizer(model=args.model, device=args.device, layer=args.layer, max_heads=args.max_heads)
+        visualizer.run()
+    except (ImportError, ValueError) as exc:
+        parser.exit(1, f"Unable to start the attention explorer: {exc}\n")
+    except Exception as exc:
+        print(f"Unable to start the attention explorer: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

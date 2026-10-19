@@ -1,5 +1,7 @@
 # VGGT Interactive Attention Visualizer 技术报告
 
+> 历史实现说明：本报告记录早期可视化方案，包含当时固定的图像尺寸、token 数量、缓存方式和界面行为。发布版的实现与这些描述已有变化；当前使用方法请以 [README](README.md) 和 [可视化指南](ATTENTION_VISUALIZATION_GUIDE.md) 为准，正确性以 `tests/` 中的断言测试及验证记录为准。
+
 ## 概述
 
 VGGT Interactive Attention Visualizer 是一个基于深度学习的多视图几何理解模型的交互式注意力可视化工具。该系统通过分析VGGT-1B模型的attention maps，实现对图像中任意patch的多视图attention分布的实时可视化。

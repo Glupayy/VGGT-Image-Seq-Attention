@@ -1,0 +1,76 @@
+{
+  "kind": "showcase-entry-point-validation",
+  "date": "2026-10-21",
+  "passed": true,
+  "automated_tests": {
+    "source_checkout": 152,
+    "extracted_sdist": 152
+  },
+  "native_gui": {
+    "passed": true,
+    "real_aggregator_forward_calls": 1,
+    "flow": "Native macOS Tk + background strict loading/inference + canvas click + style selector + three result windows + original-size PNGs",
+    "renders": [
+      {
+        "style": "spotlight",
+        "render_size": [
+          2580,
+          1480
+        ],
+        "max_abs_diff": {
+          "outgoing": 0.0,
+          "incoming": 0.0
+        }
+      },
+      {
+        "style": "links",
+        "render_size": [
+          2580,
+          1480
+        ],
+        "max_abs_diff": {
+          "outgoing": 0.0,
+          "incoming": 0.0
+        }
+      },
+      {
+        "style": "raw",
+        "render_size": [
+          2160,
+          2150
+        ],
+        "max_abs_diff": {
+          "outgoing": 0.0,
+          "incoming": 0.0
+        }
+      }
+    ]
+  },
+  "installed_wheel": {
+    "passed": true,
+    "environment": "installed wheel, executed from /private/tmp outside the checkout",
+    "synthetic_styles": [
+      "spotlight",
+      "links",
+      "raw"
+    ],
+    "style_change_preserves_raw_arrays": true,
+    "real_scene": "flower, source 0 patch (14,25), global block 11, all heads",
+    "max_abs_diff": {
+      "images": 0.0,
+      "outgoing": 0.0,
+      "incoming": 0.0
+    },
+    "published_png_pixel_identical": true
+  },
+  "package_content": {
+    "sample_pngs_in_sdist": 9,
+    "gallery_generation_script_in_sdist": true,
+    "showcase_module_in_wheel": true,
+    "model_weights_in_distributions": false
+  },
+  "not_tested": [
+    "CUDA execution",
+    "Remote GitHub Actions"
+  ]
+}

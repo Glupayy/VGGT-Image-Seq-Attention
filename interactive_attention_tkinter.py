@@ -33,18 +33,24 @@ class TkinterAttentionVisualizer:
         self,
         model: str = "facebook/VGGT-1B",
         device: str = "auto",
-        layer: str = "global_block_23",
+        layer: str = "global_block_11",
         max_heads: Optional[int] = None,
+        style: str = "spotlight",
     ):
         if not re.fullmatch(r"global_block_(?:[0-9]|1[0-9]|2[0-3])", layer):
             raise ValueError("layer must be global_block_0 through global_block_23")
         if max_heads is not None and max_heads < 1:
             raise ValueError("max_heads must be a positive integer or None")
+        if style not in {"spotlight", "links", "raw"}:
+            raise ValueError("style must be spotlight, links, or raw")
         self.model_id = model
         self.requested_device = device
         self.device = device
         self.layer = layer
         self.max_heads = max_heads
+        self.style = style
+        self.style_choice = None
+        self.style_selector = None
         self.dtype = None
         self.model = None
         self.model_loaded = False
@@ -78,6 +84,13 @@ class TkinterAttentionVisualizer:
 
     def on_quality_mode_changed(self):
         self._high_quality = bool(self.high_quality_mode.get())
+
+    def on_style_changed(self, event=None):
+        # Copy the Tk value on the main thread; workers only read plain state.
+        self.style = self.style_choice.get()
+        if self._selected_patch is not None and not self._busy:
+            self._set_busy(True, f"Rendering {self.style} view…")
+            self._start_worker(self.show_attention_for_click, (self._selected_patch,))
 
     def _select_device(self):
         import torch
@@ -237,28 +250,30 @@ class TkinterAttentionVisualizer:
         )
 
     def visualize_patch_attention_dual(self, patch_attention_data: Dict) -> Optional[Image.Image]:
-        """Render both directions using the same scale for all views."""
+        """Render the selected presentation; preserve the old callable name."""
         if patch_attention_data is None:
             return None
         if self.current_images is None:
             raise RuntimeError("Load images before rendering attention")
-        from vggt.visualization import render_attention_comparison
+        from vggt.visualization import render_attention_view
 
-        return render_attention_comparison(
+        return render_attention_view(
             self.current_images,
             patch_attention_data,
             patch_size=self.patch_size,
             dpi=200 if self._get_high_quality_mode() else 100,
-            shared_scale=True,
+            style=self.style,
         )
 
     def visualize_patch_attention(self, patch_attention_data: Dict, attention_type="row"):
-        """Compatibility alias; results always compare both attention directions."""
+        """Compatibility alias for the selected presentation style."""
         return self.visualize_patch_attention_dual(patch_attention_data)
 
     def _set_busy(self, busy, message=None):
         self._busy = busy
         self.load_button.configure(state="disabled" if busy else "normal")
+        if self.style_selector is not None:
+            self.style_selector.configure(state="disabled" if busy else "readonly")
         if busy:
             self.progress.start(12)
         else:
@@ -414,13 +429,18 @@ class TkinterAttentionVisualizer:
             self.result_window.destroy()
         window = self.tk.Toplevel(self.root)
         self.result_window = window
-        window.title("VGGT · Bidirectional attention")
+        window.title(f"VGGT · {self.style.title()} attention")
         window.geometry("1200x850")
         frame = self.ttk.Frame(window, padding=18)
         frame.pack(fill="both", expand=True)
         patch_x, patch_y = coord_info["patch_coords"]
         self.ttk.Label(frame, text=f"View {coord_info['image_idx']} · Patch (row {patch_y}, col {patch_x}) · {patch_attention_data['layer_name']}", font=("Arial", 13, "bold")).pack(anchor="w")
-        self.ttk.Label(frame, text="Outgoing: what this patch attends to. Incoming: which patches attend to it.").pack(anchor="w", pady=(6, 12))
+        description = {
+            "spotlight": "Selected patch → stronger attention regions. Each target uses its own percentile cutoff.",
+            "links": "Selected patch → highest-weight separated targets. Lines show attention, not geometric matches.",
+            "raw": "Outgoing: what this patch attends to. Incoming: which patches attend to it. Shared raw scale.",
+        }[self.style]
+        self.ttk.Label(frame, text=description).pack(anchor="w", pady=(6, 12))
         preview_label = self.ttk.Label(frame)
         preview_label.pack(fill="both", expand=True)
         # Keep the renderer's full-resolution image intact for export.
@@ -436,7 +456,7 @@ class TkinterAttentionVisualizer:
         preview_label.bind("<Configure>", resize_preview)
 
         def save_result():
-            filename = f"attention_view{coord_info['image_idx']}_patch{patch_y}_{patch_x}_{self.layer}.png"
+            filename = f"attention_{self.style}_view{coord_info['image_idx']}_patch{patch_y}_{patch_x}_{self.layer}.png"
             path = self.filedialog.asksaveasfilename(
                 parent=window, title="Export full-resolution attention", initialdir=str(self._export_directory),
                 initialfile=filename, defaultextension=".png", filetypes=[("PNG image", "*.png")],
@@ -473,6 +493,7 @@ class TkinterAttentionVisualizer:
         self.root.minsize(760, 560)
         self.root.protocol("WM_DELETE_WINDOW", self._close)
         self.high_quality_mode = tk.BooleanVar(master=self.root, value=self._high_quality)
+        self.style_choice = tk.StringVar(master=self.root, value=self.style)
         main = ttk.Frame(self.root, padding=20)
         main.pack(fill="both", expand=True)
         toolbar = ttk.Frame(main)
@@ -486,6 +507,10 @@ class TkinterAttentionVisualizer:
         controls.pack(side="right")
         self.load_button = ttk.Button(controls, text="Open 1–6 images…", command=self.load_images_dialog)
         self.load_button.pack(anchor="e")
+        self.style_selector = ttk.Combobox(controls, textvariable=self.style_choice,
+                                          values=("spotlight", "links", "raw"), state="readonly", width=18)
+        self.style_selector.pack(anchor="e", pady=(6, 0))
+        self.style_selector.bind("<<ComboboxSelected>>", self.on_style_changed)
         ttk.Checkbutton(controls, text="High-resolution export", variable=self.high_quality_mode, command=self.on_quality_mode_changed).pack(anchor="e", pady=(6, 0))
         ttk.Separator(main).pack(fill="x", pady=14)
         self.info_label = ttk.Label(main, text="Open scene views, then click an image patch to compare attention.", wraplength=1100)
@@ -497,7 +522,7 @@ class TkinterAttentionVisualizer:
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<Motion>", self.on_canvas_motion)
         self.canvas.bind("<Configure>", lambda event: self.update_canvas_display())
-        ttk.Label(main, text="Patch coordinates use the resized / cropped model input. Both attention directions share one color scale.\nWeights are loaded on the first image run; later clicks reuse the cached attention.", foreground="#687386", wraplength=1100).pack(anchor="w", pady=(12, 0))
+        ttk.Label(main, text="Click a patch; switch between spotlight, sparse targets and raw analysis.\nCoordinates use the preprocessed model input. Clicks and style changes reuse the cached attention.", foreground="#687386", wraplength=1100).pack(anchor="w", pady=(12, 0))
         self.root.after(60, self._drain_events)
 
     def run(self):
@@ -514,7 +539,8 @@ def build_parser():
     parser = argparse.ArgumentParser(description="Explore VGGT patch attention in a desktop window. Model weights are loaded only after selecting 1–6 images.")
     parser.add_argument("--model", default="facebook/VGGT-1B", help="Hugging Face model ID or local pretrained model directory")
     parser.add_argument("--device", default="auto", help="auto (CUDA when available), cpu, cuda, or cuda:N")
-    parser.add_argument("--layer", default="global_block_23", help="global_block_0 through global_block_23 (default: %(default)s)")
+    parser.add_argument("--layer", default="global_block_11", help="global_block_0 through global_block_23 (default: %(default)s)")
+    parser.add_argument("--style", choices=("spotlight", "links", "raw"), default="spotlight")
     parser.add_argument("--max-heads", type=int, default=None, help="cache only the first K heads (default: all heads)")
     return parser
 
@@ -523,7 +549,8 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        visualizer = TkinterAttentionVisualizer(model=args.model, device=args.device, layer=args.layer, max_heads=args.max_heads)
+        visualizer = TkinterAttentionVisualizer(model=args.model, device=args.device, layer=args.layer,
+                                               max_heads=args.max_heads, style=args.style)
         visualizer.run()
     except (ImportError, ValueError) as exc:
         parser.exit(1, f"Unable to start the attention explorer: {exc}\n")

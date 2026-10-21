@@ -26,7 +26,10 @@ jobs:
       - name: Numeric and integration tests
         run: python -m pytest -q
       - name: Offline export
-        run: vggt-attention --demo --output outputs/demo.png
+        run: |
+          for style in spotlight links raw; do
+            vggt-attention --demo --style "$style" --output "outputs/demo-$style.png"
+          done
       - name: Build distributions
         run: python -m build
       - name: Verify tests from the source archive
@@ -39,7 +42,9 @@ jobs:
         run: |
           python -m pip install --no-deps --force-reinstall dist/*.whl
           cd "$RUNNER_TEMP"
-          vggt-attention --demo --output "$GITHUB_WORKSPACE/outputs/installed.png"
+          for style in spotlight links raw; do
+            vggt-attention --demo --style "$style" --output "$GITHUB_WORKSPACE/outputs/installed-$style.png"
+          done
           vggt-attention-gui --help
       - uses: actions/upload-artifact@v4
         with:

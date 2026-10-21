@@ -1,8 +1,9 @@
 include LICENSE.txt README.md README.zh-CN.md
 include ATTENTION_VISUALIZATION_GUIDE.md CONTRIBUTING.md *.ipynb
 include *.py *.sh requirements*.txt
-recursive-include docs *.md *.svg *.png *.json *.npz
+recursive-include docs *.md *.svg *.png *.gif *.json *.npz
 recursive-include tests *.py
 recursive-include scripts *.py
 recursive-include temp_images *.jpg
 recursive-include research *.md *.py *.png
+recursive-include sample_images *.png *.md *.json

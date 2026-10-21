@@ -11,6 +11,12 @@ Then run `python -m pip install -e '.[dev]'` from the repository.
 - `vggt-attention-gui --help`: desktop launch options, no window or model load.
 - `python interactive_attention_tkinter.py`: equivalent source GUI entry.
 
+CLI and GUI default to `global_block_11` and `spotlight`. Use `--style links`
+for sparse outgoing targets or `--style raw` for shared-scale outgoing/incoming
+maps. The GUI style selector redraws the selected query from its existing cache.
+See the [real sample gallery](showcase.md) for reproducible commands and display
+thresholds. The core cache API retains its block-23 compatibility default.
+
 `pip install .` also installs the CLI, GUI and cache modules. Optional extras:
 `[notebook]` for JupyterLab, `[demo]` for upstream reconstruction demos, `[research]`
 for the archived position-analysis scripts. COLMAP and LightGlue requirements are

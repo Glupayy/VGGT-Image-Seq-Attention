@@ -1,0 +1,672 @@
+{
+  "kind": "curated-pretrained-attention-showcase",
+  "created_at_utc": "2026-10-21T09:08:28.599420+00:00",
+  "passed": true,
+  "device": "cpu",
+  "dtype": "float32",
+  "torch_version": "2.11.0",
+  "threads": 4,
+  "scope": "full aggregator; geometric prediction heads not executed",
+  "checkpoint": {
+    "filename": "model.safetensors",
+    "bytes": 5026367224,
+    "sha256": "f164acf60724910d8fe1578bb499d800850c7bb0948db7555c413f9fbe60467e",
+    "strict_loading": true,
+    "model_id": "facebook/VGGT-1B",
+    "revision": "860abec7937da0a4c03c41d3c269c366e82abdf9"
+  },
+  "layer": "global_block_11",
+  "selected_heads": "all 16 heads; arithmetic mean",
+  "sample_sources": "sample_images/SOURCES.json",
+  "curation": "Visually chosen interpretable queries; not a matching-accuracy benchmark. Other queries can attend to boundaries or unrelated regions.",
+  "display": {
+    "spotlight": "Original RGB retained strictly above each target view's 90th percentile; other pixels dimmed to 34%. No attention renormalization.",
+    "links": "Rank 1 raw outgoing maximum in each target view; patch-center arrows. Not a verified geometric match.",
+    "animation": "Two real LEGO queries, same model forward/layer/heads; 1800 ms per query."
+  },
+  "scenes": [
+    {
+      "scene": "flower",
+      "inputs": [
+        "sample_images/flower/000.png",
+        "sample_images/flower/006.png",
+        "sample_images/flower/012.png"
+      ],
+      "input_shape": [
+        3,
+        3,
+        392,
+        518
+      ],
+      "cache_shape": [
+        1,
+        1,
+        3123,
+        3123
+      ],
+      "cache_bytes": 39012516,
+      "capture_parity": {
+        "passed": true,
+        "outputs": 24,
+        "max_abs_diff": 0.0
+      },
+      "probabilities": {
+        "finite": true,
+        "nonnegative": true,
+        "full_rows_sum_to_one": true,
+        "max_row_sum_error": 4.76837158203125e-07
+      },
+      "queries": [
+        {
+          "name": "flower-center",
+          "source_view": 0,
+          "patch_row_col": [
+            14,
+            25
+          ],
+          "source_token_idx": 548,
+          "independent_float64_reference": {
+            "full_row": {
+              "allclose": true,
+              "max_abs_diff": 1.0220121066106813e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                3123
+              ],
+              "expected_shape": [
+                1,
+                3123
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "full_column": {
+              "allclose": true,
+              "max_abs_diff": 1.0250312369730619e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                3123
+              ],
+              "expected_shape": [
+                1,
+                3123
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_outgoing": {
+              "allclose": true,
+              "max_abs_diff": 1.0220121066106813e-07,
+              "finite": true,
+              "actual_shape": [
+                3108
+              ],
+              "expected_shape": [
+                3108
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_incoming": {
+              "allclose": true,
+              "max_abs_diff": 1.0250312369730619e-07,
+              "finite": true,
+              "actual_shape": [
+                3108
+              ],
+              "expected_shape": [
+                3108
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            }
+          },
+          "targets": [
+            {
+              "view": 1,
+              "raw_visible_mass": 0.24778342247009277,
+              "spotlight_selected_patches": 104,
+              "spotlight_selected_mass": 0.17279300093650818,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 14,
+                  "col": 14,
+                  "score": 0.04399966821074486
+                },
+                {
+                  "rank": 2,
+                  "row": 27,
+                  "col": 2,
+                  "score": 0.018380433320999146
+                },
+                {
+                  "rank": 3,
+                  "row": 11,
+                  "col": 36,
+                  "score": 0.008606143295764923
+                }
+              ]
+            },
+            {
+              "view": 2,
+              "raw_visible_mass": 0.2482292652130127,
+              "spotlight_selected_patches": 104,
+              "spotlight_selected_mass": 0.17134292423725128,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 12,
+                  "col": 17,
+                  "score": 0.03446440026164055
+                },
+                {
+                  "rank": 2,
+                  "row": 27,
+                  "col": 1,
+                  "score": 0.010844249278306961
+                },
+                {
+                  "rank": 3,
+                  "row": 27,
+                  "col": 24,
+                  "score": 0.0071425787173211575
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "elapsed_seconds": 35.35365362500306
+    },
+    {
+      "scene": "lego",
+      "inputs": [
+        "sample_images/lego/00.png",
+        "sample_images/lego/03.png",
+        "sample_images/lego/06.png"
+      ],
+      "input_shape": [
+        3,
+        3,
+        350,
+        518
+      ],
+      "cache_shape": [
+        1,
+        1,
+        2790,
+        2790
+      ],
+      "cache_bytes": 31136400,
+      "capture_parity": {
+        "passed": true,
+        "outputs": 24,
+        "max_abs_diff": 0.0
+      },
+      "probabilities": {
+        "finite": true,
+        "nonnegative": true,
+        "full_rows_sum_to_one": true,
+        "max_row_sum_error": 5.960464477539062e-07
+      },
+      "queries": [
+        {
+          "name": "lego-cabin",
+          "source_view": 0,
+          "patch_row_col": [
+            9,
+            17
+          ],
+          "source_token_idx": 355,
+          "independent_float64_reference": {
+            "full_row": {
+              "allclose": true,
+              "max_abs_diff": 2.2407527056067522e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                2790
+              ],
+              "expected_shape": [
+                1,
+                2790
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "full_column": {
+              "allclose": true,
+              "max_abs_diff": 2.240752705884308e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                2790
+              ],
+              "expected_shape": [
+                1,
+                2790
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_outgoing": {
+              "allclose": true,
+              "max_abs_diff": 2.2407527056067522e-07,
+              "finite": true,
+              "actual_shape": [
+                2775
+              ],
+              "expected_shape": [
+                2775
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_incoming": {
+              "allclose": true,
+              "max_abs_diff": 2.240752705884308e-07,
+              "finite": true,
+              "actual_shape": [
+                2775
+              ],
+              "expected_shape": [
+                2775
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            }
+          },
+          "targets": [
+            {
+              "view": 1,
+              "raw_visible_mass": 0.20374730229377747,
+              "spotlight_selected_patches": 93,
+              "spotlight_selected_mass": 0.13238435983657837,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 7,
+                  "col": 14,
+                  "score": 0.05023602396249771
+                },
+                {
+                  "rank": 2,
+                  "row": 11,
+                  "col": 18,
+                  "score": 0.004154485650360584
+                },
+                {
+                  "rank": 3,
+                  "row": 11,
+                  "col": 21,
+                  "score": 0.003071693005040288
+                }
+              ]
+            },
+            {
+              "view": 2,
+              "raw_visible_mass": 0.1866704523563385,
+              "spotlight_selected_patches": 93,
+              "spotlight_selected_mass": 0.11109979450702667,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 10,
+                  "col": 25,
+                  "score": 0.009623129852116108
+                },
+                {
+                  "rank": 2,
+                  "row": 11,
+                  "col": 22,
+                  "score": 0.0035865134559571743
+                },
+                {
+                  "rank": 3,
+                  "row": 24,
+                  "col": 29,
+                  "score": 0.003170235548168421
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "lego-bucket",
+          "source_view": 0,
+          "patch_row_col": [
+            14,
+            29
+          ],
+          "source_token_idx": 552,
+          "independent_float64_reference": {
+            "full_row": {
+              "allclose": true,
+              "max_abs_diff": 1.1504505431636503e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                2790
+              ],
+              "expected_shape": [
+                1,
+                2790
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "full_column": {
+              "allclose": true,
+              "max_abs_diff": 1.744896850758293e-07,
+              "finite": true,
+              "actual_shape": [
+                1,
+                2790
+              ],
+              "expected_shape": [
+                1,
+                2790
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_outgoing": {
+              "allclose": true,
+              "max_abs_diff": 1.1504505431636503e-07,
+              "finite": true,
+              "actual_shape": [
+                2775
+              ],
+              "expected_shape": [
+                2775
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_incoming": {
+              "allclose": true,
+              "max_abs_diff": 1.744896850758293e-07,
+              "finite": true,
+              "actual_shape": [
+                2775
+              ],
+              "expected_shape": [
+                2775
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            }
+          },
+          "targets": [
+            {
+              "view": 1,
+              "raw_visible_mass": 0.19378766417503357,
+              "spotlight_selected_patches": 93,
+              "spotlight_selected_mass": 0.08714693784713745,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 17,
+                  "col": 19,
+                  "score": 0.006297637242823839
+                },
+                {
+                  "rank": 2,
+                  "row": 14,
+                  "col": 23,
+                  "score": 0.0025867021176964045
+                },
+                {
+                  "rank": 3,
+                  "row": 19,
+                  "col": 36,
+                  "score": 0.0018977434374392033
+                }
+              ]
+            },
+            {
+              "view": 2,
+              "raw_visible_mass": 0.21407845616340637,
+              "spotlight_selected_patches": 93,
+              "spotlight_selected_mass": 0.10104665160179138,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 19,
+                  "col": 18,
+                  "score": 0.010245651006698608
+                },
+                {
+                  "rank": 2,
+                  "row": 24,
+                  "col": 36,
+                  "score": 0.00489885825663805
+                },
+                {
+                  "rank": 3,
+                  "row": 24,
+                  "col": 29,
+                  "score": 0.0036209598183631897
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "elapsed_seconds": 24.877766499994323
+    },
+    {
+      "scene": "fern",
+      "inputs": [
+        "sample_images/fern/000.png",
+        "sample_images/fern/005.png",
+        "sample_images/fern/010.png"
+      ],
+      "input_shape": [
+        3,
+        3,
+        392,
+        518
+      ],
+      "cache_shape": [
+        1,
+        1,
+        3123,
+        3123
+      ],
+      "cache_bytes": 39012516,
+      "capture_parity": {
+        "passed": true,
+        "outputs": 24,
+        "max_abs_diff": 0.0
+      },
+      "probabilities": {
+        "finite": true,
+        "nonnegative": true,
+        "full_rows_sum_to_one": true,
+        "max_row_sum_error": 3.5762786865234375e-07
+      },
+      "queries": [
+        {
+          "name": "fern-trunk",
+          "source_view": 0,
+          "patch_row_col": [
+            19,
+            19
+          ],
+          "source_token_idx": 727,
+          "independent_float64_reference": {
+            "full_row": {
+              "allclose": true,
+              "max_abs_diff": 5.612209464517237e-08,
+              "finite": true,
+              "actual_shape": [
+                1,
+                3123
+              ],
+              "expected_shape": [
+                1,
+                3123
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "full_column": {
+              "allclose": true,
+              "max_abs_diff": 3.7966799287803e-08,
+              "finite": true,
+              "actual_shape": [
+                1,
+                3123
+              ],
+              "expected_shape": [
+                1,
+                3123
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_outgoing": {
+              "allclose": true,
+              "max_abs_diff": 5.612209464517237e-08,
+              "finite": true,
+              "actual_shape": [
+                3108
+              ],
+              "expected_shape": [
+                3108
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            },
+            "spatial_incoming": {
+              "allclose": true,
+              "max_abs_diff": 3.7966799287803e-08,
+              "finite": true,
+              "actual_shape": [
+                3108
+              ],
+              "expected_shape": [
+                3108
+              ],
+              "rtol": 0.0001,
+              "atol": 1e-07
+            }
+          },
+          "targets": [
+            {
+              "view": 1,
+              "raw_visible_mass": 0.2839941680431366,
+              "spotlight_selected_patches": 104,
+              "spotlight_selected_mass": 0.21608403325080872,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 19,
+                  "col": 17,
+                  "score": 0.05524365231394768
+                },
+                {
+                  "rank": 2,
+                  "row": 27,
+                  "col": 25,
+                  "score": 0.014898955821990967
+                },
+                {
+                  "rank": 3,
+                  "row": 15,
+                  "col": 23,
+                  "score": 0.004056723788380623
+                }
+              ]
+            },
+            {
+              "view": 2,
+              "raw_visible_mass": 0.3077019453048706,
+              "spotlight_selected_patches": 104,
+              "spotlight_selected_mass": 0.232978954911232,
+              "top3_separated_peaks": [
+                {
+                  "rank": 1,
+                  "row": 19,
+                  "col": 18,
+                  "score": 0.05143887549638748
+                },
+                {
+                  "rank": 2,
+                  "row": 27,
+                  "col": 27,
+                  "score": 0.023270579054951668
+                },
+                {
+                  "rank": 3,
+                  "row": 27,
+                  "col": 24,
+                  "score": 0.009095050394535065
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "elapsed_seconds": 23.662767458939925
+    }
+  ],
+  "artifacts": {
+    "fern-trunk-links.png": {
+      "sha256": "ab8aa5d86ba9aba4c2a1d89ce0cd2e9440275550f60a8f362c1cceb832965399",
+      "bytes": 1321232
+    },
+    "fern-trunk-spotlight.png": {
+      "sha256": "a9e9c1af60d80ed8de75dea268905f547296fa4731392f9cf5ceb073f3ad09ba",
+      "bytes": 1083810
+    },
+    "fern-trunk.npz": {
+      "sha256": "80f1ef9972fbaf5896e25e56bd4dfe5c9d974fd4798ec8963aeb50ebe59a7880",
+      "bytes": 2051603
+    },
+    "flower-center-links.png": {
+      "sha256": "5c1bfd16deeaf04e7c578f56109f799e8e3dfcc43104c06976de21e2d6aa8fd0",
+      "bytes": 1432898
+    },
+    "flower-center-spotlight.png": {
+      "sha256": "ba468aa47ceba2c226ced7286f12af6229c4417620891d6652e0954d7378be7c",
+      "bytes": 1167229
+    },
+    "flower-center.npz": {
+      "sha256": "9d114bee5578a0355b2827fae4c4965acafdea884ef3751b684e7aac13ecddcd",
+      "bytes": 2187546
+    },
+    "lego-bucket-links.png": {
+      "sha256": "f0fc71ecc76e8313399c87b0300a5f0754be2036b14a19490cdfc4ee07c026c0",
+      "bytes": 1356434
+    },
+    "lego-bucket-spotlight.png": {
+      "sha256": "edad01ff8ba45ca907eda650aabdd5394d18d38216c5408e1958d44efe5e0be1",
+      "bytes": 1125001
+    },
+    "lego-bucket.npz": {
+      "sha256": "88e837c77ee222d0dfd49deb244cc9f5573d3d927f64c8ed88de3793353dab5e",
+      "bytes": 1864453
+    },
+    "lego-cabin-links.png": {
+      "sha256": "2c9068023a7a6896a0273fd0c417206f6168983fb4021d483cd64c4ff480ea9c",
+      "bytes": 1358831
+    },
+    "lego-cabin-spotlight.png": {
+      "sha256": "ef81e3808d293f286cebfa1540e4ae161e9adf0e83d4d56a551830b9baf4581f",
+      "bytes": 1126896
+    },
+    "lego-cabin.npz": {
+      "sha256": "0bf51fde6c1a70c6fd8beeea1811a7521d30a0c7bd254d93388aed1ad7edc7df",
+      "bytes": 1864491
+    },
+    "lego-query-change.gif": {
+      "sha256": "236b0a12e3a6e8b10ca11f9b326b143eb8716f85f080abf06c548d679866a2a7",
+      "bytes": 917948
+    }
+  }
+}

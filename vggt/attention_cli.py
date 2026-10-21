@@ -13,7 +13,13 @@ def build_parser():
     parser.add_argument("--demo", action="store_true", help="Offline synthetic tiny-model fixture; no pretrained weights")
     parser.add_argument("--model", default="facebook/VGGT-1B", help="Hugging Face model ID or local checkpoint directory")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
-    parser.add_argument("--layer", type=int, default=None, help="Global block index (default: 23; demo: 1)")
+    parser.add_argument("--layer", type=int, default=None, help="Global block index (default: 11; demo: 1)")
+    parser.add_argument("--style", choices=("spotlight", "links", "raw"), default="spotlight",
+                        help="Query spotlight, sparse attention targets, or raw bidirectional maps")
+    parser.add_argument("--top-percent", type=float, default=10,
+                        help="Percentage above a within-view rank cutoff in spotlight (default: 10)")
+    parser.add_argument("--top-k", type=int, default=3,
+                        help="Number of separated attention peaks per view in links (default: 3)")
     parser.add_argument("--max-heads", type=int, default=None, help="Average the first K heads (default: all)")
     parser.add_argument("--source", type=int, default=0, help="Zero-based source view index")
     parser.add_argument("--patch", type=int, nargs=2, metavar=("ROW", "COL"), default=None,
@@ -53,7 +59,11 @@ def main(argv: Optional[Sequence[str]] = None):
     args = parser.parse_args(argv)
     if args.max_heads is not None and args.max_heads < 1:
         parser.error("--max-heads must be a positive integer")
-    layer = args.layer if args.layer is not None else (1 if args.demo else 23)
+    if not 0 < args.top_percent < 100:
+        parser.error("--top-percent must be between 0 and 100 (exclusive)")
+    if args.top_k < 1:
+        parser.error("--top-k must be a positive integer")
+    layer = args.layer if args.layer is not None else (1 if args.demo else 11)
     if not 0 <= layer < (2 if args.demo else 24):
         parser.error("--layer is outside the model's global block range")
     if args.output.suffix.lower() != ".png":
@@ -77,7 +87,7 @@ def main(argv: Optional[Sequence[str]] = None):
 
     import numpy as np
     import torch
-    from vggt.visualization import render_attention_comparison
+    from vggt.visualization import render_attention_view
 
     try:
         if args.demo:
@@ -113,7 +123,8 @@ def main(argv: Optional[Sequence[str]] = None):
         if data is None:
             raise ValueError("No attention was captured for the requested layer")
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        image = render_attention_comparison(images, data)
+        image = render_attention_view(images, data, style=args.style,
+                                      top_percent=args.top_percent, top_k=args.top_k)
         image.save(args.output)
         np.savez_compressed(args.output.with_suffix(".npz"),
                             outgoing=np.stack([m.float().numpy() for m in data["attention_maps_row"]]),
@@ -125,6 +136,10 @@ def main(argv: Optional[Sequence[str]] = None):
                     "selected_num_heads": data.get("selected_num_heads"),
                     "original_num_heads": data.get("original_num_heads"),
                     "head_reduction": "mean",
+                    "display": {"style": args.style,
+                                "direction": "outgoing + incoming" if args.style == "raw" else "outgoing",
+                                "spotlight_above_percentile": 100 - args.top_percent if args.style == "spotlight" else None,
+                                "separated_target_peaks": args.top_k if args.style == "links" else None},
                     "cache": info, "normalization": "raw softmax(QK^T / sqrt(d)), head mean; no column normalization"}
         args.output.with_suffix(".json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
         print(f"Saved {args.output} (+ .npz raw maps and .json provenance)")

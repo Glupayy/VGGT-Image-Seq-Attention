@@ -1,0 +1,124 @@
+{
+  "source_repository": "https://github.com/facebookresearch/vggt",
+  "source_revision": "b529f922f3b05fada4374ab95cd4f2b1d06f6469",
+  "verified_unchanged_at_revision": "a288dd0f14786c93483e45524328726ab7b1b4ce",
+  "files": [
+    {
+      "path": "sample_images/lego/00.png",
+      "scene": "lego",
+      "upstream_path": "examples/kitchen/images/00.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/00.png",
+      "git_blob_sha1": "2e10e5dc0897d2c04ac962143cd713e53d4b4173",
+      "sha256": "54527a575988094058cdc1975b421c48e0f446726473d0ac21ea55ecb24e96a7",
+      "size_bytes": 691089,
+      "image_width_height": [
+        779,
+        520
+      ]
+    },
+    {
+      "path": "sample_images/lego/03.png",
+      "scene": "lego",
+      "upstream_path": "examples/kitchen/images/03.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/03.png",
+      "git_blob_sha1": "b2923cb2ba6aece1a5906796ea28b7bf1731adef",
+      "sha256": "78193756310d9abaf81fa28902cf0b284260a0a916b085a7c08a4723eead1dd6",
+      "size_bytes": 828488,
+      "image_width_height": [
+        779,
+        520
+      ]
+    },
+    {
+      "path": "sample_images/lego/06.png",
+      "scene": "lego",
+      "upstream_path": "examples/kitchen/images/06.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/06.png",
+      "git_blob_sha1": "786ee5c51e9121b10c492fe6cffb10520a44887a",
+      "sha256": "2fcc2b871c6fef6f3a3e0f06a3ffc1f0eee3e40afa2461f7c7c665057decb3e6",
+      "size_bytes": 673638,
+      "image_width_height": [
+        779,
+        520
+      ]
+    },
+    {
+      "path": "sample_images/flower/000.png",
+      "scene": "flower",
+      "upstream_path": "examples/llff_flower/images/000.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/000.png",
+      "git_blob_sha1": "6a2ed1518ff8f6c807b5a08584b44c349f9c00d9",
+      "sha256": "44fd722188241bb64f6011382d32940c1b4e61214938bf688f793e29adef580e",
+      "size_bytes": 655368,
+      "image_width_height": [
+        706,
+        529
+      ]
+    },
+    {
+      "path": "sample_images/flower/006.png",
+      "scene": "flower",
+      "upstream_path": "examples/llff_flower/images/006.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/006.png",
+      "git_blob_sha1": "8b7995a0003cf535c48147fe4263873216ab2dd3",
+      "sha256": "2ccbe4569017ba3c9c41069e24a45da3b7235ddb345b77f716cb6c6caddcdd35",
+      "size_bytes": 651084,
+      "image_width_height": [
+        706,
+        529
+      ]
+    },
+    {
+      "path": "sample_images/flower/012.png",
+      "scene": "flower",
+      "upstream_path": "examples/llff_flower/images/012.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/012.png",
+      "git_blob_sha1": "014bf8d21c3976d4df89c5e45cd8e9b318fd5f05",
+      "sha256": "8b7f31473bbbb263ea3894a222ef325797e38613799ad733ed989841d4808104",
+      "size_bytes": 642073,
+      "image_width_height": [
+        706,
+        529
+      ]
+    },
+    {
+      "path": "sample_images/fern/000.png",
+      "scene": "fern",
+      "upstream_path": "examples/llff_fern/images/000.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/000.png",
+      "git_blob_sha1": "d101416bbc0fdb869c3fb57bd862100e72397b97",
+      "sha256": "47f447d31a84d53494045087cbb8a40b877a68a76f549af14f6bb6f490a5b05d",
+      "size_bytes": 670941,
+      "image_width_height": [
+        706,
+        529
+      ]
+    },
+    {
+      "path": "sample_images/fern/005.png",
+      "scene": "fern",
+      "upstream_path": "examples/llff_fern/images/005.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/005.png",
+      "git_blob_sha1": "d6f7687bdb1b01971377c1b3a9b49fc8da056d6a",
+      "sha256": "e7ce2bcabcd2b2972c505e2649eb0f5b9efb30adcd455d93f5014370d53f2653",
+      "size_bytes": 632688,
+      "image_width_height": [
+        706,
+        529
+      ]
+    },
+    {
+      "path": "sample_images/fern/010.png",
+      "scene": "fern",
+      "upstream_path": "examples/llff_fern/images/010.png",
+      "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/010.png",
+      "git_blob_sha1": "d57f41b9709082cb3c8c84dc61d4e179d4c83cd1",
+      "sha256": "390054ae2969ce5ed0e8ed9b9c0501c527028b565e18807e0acd5d62a4627dae",
+      "size_bytes": 637464,
+      "image_width_height": [
+        706,
+        529
+      ]
+    }
+  ]
+}

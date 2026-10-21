@@ -1,8 +1,51 @@
 # Validation record
 
-Release preparation date: 2026-10-19 (Asia/Shanghai).
+## Gallery revision — 2026-10-21 (Asia/Shanghai)
 
-## Local result
+**152 tests passed.** The suite now also checks percentile selection, spatially
+separated raw maxima, exact query/target arrow endpoints, uniform maps, 1/2/6-view
+layout, long score captions, per-file sample hashes, display dispatch, and GUI
+style switching. PNGs differ across styles while the exported raw arrays remain
+identical. Tests require neither pretrained weights nor network access.
+
+The gallery was regenerated from the same verified official checkpoint below,
+using `strict=True`, CPU float32, four threads, global block 11 and all 16 heads.
+Each scene uses three source images, with four curated queries in total.
+
+| Scene | All 24 outputs, capture off/on | Maximum full-row sum error |
+| --- | --- | --- |
+| Flower | Exact equality; maximum difference 0 | `4.768e-07` |
+| LEGO | Exact equality; maximum difference 0 | `5.960e-07` |
+| Fern | Exact equality; maximum difference 0 | `3.576e-07` |
+
+All four queries' full outgoing rows, full incoming columns and extracted
+spatial maps pass an independent float64 attention reference (`rtol=1e-4`,
+`atol=1e-7`); the largest absolute difference is `2.241e-07`. QKV, Q/K
+normalization and RoPE are reapplied in model float32 before float64 QK products,
+softmax and full-row denominators. No per-view attention renormalization is used.
+
+A native macOS Tk check ran one real flower inference, clicked patch `(14,25)`,
+and switched through Spotlight, Links and Raw. All three result windows and
+full-resolution exports passed; raw outgoing/incoming arrays match the gallery
+exactly. A forward hook counted **one** aggregator call across all three styles.
+Spotlight and Links exported at 2580 × 1480; Raw exported at 2160 × 2150.
+
+The source archive and wheel both build. The extracted source archive passes
+the same 152 tests and contains all nine sample PNGs and the generation script.
+The installed wheel was exercised from `/private/tmp`, outside the checkout:
+all three offline styles pass, and a real flower export has exactly the same
+raw arrays and PNG pixels as the published gallery. Neither distribution
+contains model weights. CUDA and remote GitHub Actions were not tested here.
+
+[Gallery, selection limits and reproduction](showcase.md) ·
+[Complete gallery numeric record](assets/showcase/validation.json) ·
+[Desktop and package record](assets/showcase/integration.json)
+
+## Original release preparation — 2026-10-19
+
+The following records preserve the earlier bathroom / block-23 validation.
+
+### Local result
 
 **89 tests passed.** The native desktop check, offline export, wheel build, source
 archive build, and installed-wheel export from outside the checkout passed.
@@ -13,7 +56,7 @@ Test environment: macOS arm64, Python 3.11.4, torch 2.11.0, torchvision 0.26.0,
 NumPy 1.24.3, Pillow 12.0.0, matplotlib 3.10.8, huggingface_hub 1.2.4,
 safetensors 0.5.3, einops 0.8.2. CUDA execution was not tested on this machine.
 
-## Automated checks
+### Automated checks
 
 The CPU suite exercises actual project components with small tensors and tiny
 random models. It does not download weights:
@@ -34,7 +77,7 @@ Run `python -m pytest -q`. GitHub Actions is configured for CPU tests, offline
 exports and package builds on Python 3.10 and 3.12. Remote CI has not run as part
 of this local preparation.
 
-## Desktop check
+### Desktop check
 
 A native macOS Tk session was opened and updated successfully. The check created
 the viewer, populated a two-view grid, verified scaled click coordinates, opened
@@ -51,7 +94,7 @@ the independent validation path exactly (maximum difference 0).
 
 [Entry-point integration record](assets/integration-validation.json)
 
-## Pretrained model check
+### Pretrained model check
 
 The reproducible script is `scripts/validate_pretrained.py`. It runs the official
 checkpoint through the real aggregator twice (cache off/on), compares outputs,

@@ -1,4 +1,4 @@
-"""Headless, shared-scale plots for outgoing and incoming patch attention."""
+"""Headless attention display dispatch and shared-scale bidirectional plots."""
 
 from io import BytesIO
 from typing import Mapping
@@ -10,6 +10,26 @@ from matplotlib.colors import Normalize
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 from PIL import Image
+
+
+DISPLAY_STYLES = ("spotlight", "links", "raw")
+
+
+def render_attention_view(images, patch_attention_data, *, style="spotlight", patch_size=14,
+                          dpi=160, top_percent=10, top_k=3):
+    """Choose a readable query-focused view or the raw bidirectional analysis."""
+    if style == "raw":
+        return render_attention_comparison(images, patch_attention_data, patch_size=patch_size,
+                                           dpi=dpi, shared_scale=True)
+    if style == "spotlight":
+        from vggt.showcase import render_attention_spotlight
+        return render_attention_spotlight(images, patch_attention_data, patch_size=patch_size,
+                                          dpi=dpi, top_percent=top_percent)
+    if style == "links":
+        from vggt.showcase import render_attention_links
+        return render_attention_links(images, patch_attention_data, patch_size=patch_size,
+                                      dpi=dpi, top_k=top_k)
+    raise ValueError(f"style must be one of {DISPLAY_STYLES}")
 
 
 def render_attention_comparison(

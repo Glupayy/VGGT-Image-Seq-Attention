@@ -165,4 +165,5 @@ outputs/
 validation-local/
 *.npz
 !docs/assets/bathroom-attention.npz
+!docs/assets/showcase/*.npz
 *.tmp

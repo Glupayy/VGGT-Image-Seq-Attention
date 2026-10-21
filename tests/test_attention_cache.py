@@ -162,7 +162,7 @@ def test_frame_layer_cannot_be_misinterpreted_as_global():
 
 
 def test_legacy_import_and_independent_managers():
-    from attention_cache import AttentionCacheManager as LegacyManager
+    from archive.legacy.attention_cache import AttentionCacheManager as LegacyManager
 
     assert LegacyManager is AttentionCacheManager
     first, second = make_cache(), make_cache()

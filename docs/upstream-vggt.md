@@ -1,5 +1,11 @@
-> Historical upstream README, retained for attribution and context. For this
-> extension's supported installation and attention tools, use [our README](../README.md).
+> Historical upstream README, retained for attribution and context. Commands in
+> the preserved sections below describe the original upstream checkout. For this
+> extension's maintained attention entry points, use [our README](../README.md)
+> and [usage guide](usage.md).
+>
+> Local copies of the historical reconstruction scripts and their dependency list
+> now live under [`archive/upstream/`](../archive/upstream/). The archive is
+> separate from the maintained attention tools; see the [archive index](../archive/README.md).
 
 <div align="center">
 <h1>VGGT: Visual Geometry Grounded Transformer</h1>
@@ -274,4 +280,4 @@ Thanks to these great repositories: [PoseDiffusion](https://github.com/facebookr
 
 
 ## License
-See the [LICENSE](./LICENSE.txt) file for details about the license under which this code is made available.
+See the [LICENSE](../LICENSE.txt) file for details about the license under which this code is made available.

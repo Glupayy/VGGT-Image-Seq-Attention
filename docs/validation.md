@@ -1,5 +1,41 @@
 # Validation record
 
+## Directory organization — 2026-10-21
+
+**153 tests passed** in both the source checkout and the extracted source archive.
+The root now has 17 entries, down from 44. Maintained code is in `vggt/`, inputs
+in `examples/`, tools in `scripts/`, and earlier work in `archive/`.
+
+All 152 previously tracked files were accounted for at their new paths. Sixty
+files intended to retain their contents were checked byte for byte, including
+all 15 input images, historical figures and three notebooks. The GUI implementation
+is identical apart from its module location and launch-command docstring.
+
+The rebuilt wheel was installed and checked outside the checkout. The GUI console
+entry and all three offline export styles work. Preprocessing the relocated flower
+images reproduces the published input tensors exactly; rendering their saved raw
+attention reproduces the published PNG pixel for pixel. This checks the new paths
+and package layout without presenting cached rendering as a new inference run.
+Both distributions exclude model weights.
+
+[Directory and package check record](assets/layout-validation.json)
+
+## Paths after repository reorganization
+
+The numeric JSON records retain the paths and timestamps of their recorded runs.
+The same input bytes now live in these locations; moving files does not represent
+an additional model-validation run:
+
+| Recorded path | Current repository path |
+| --- | --- |
+| `sample_images/<scene>/<file>` | `examples/images/<scene>/<file>` |
+| `sample_images/SOURCES.json` | `examples/SOURCES.json` |
+| `temp_images/<file>` | `examples/images/bathroom/<file>` |
+| `interactive_attention_tkinter.py` | `vggt/attention_gui.py` |
+
+The commands below use the current layout. Historical input-path fields in JSON
+remain unchanged so the original runs can be audited.
+
 ## Gallery revision — 2026-10-21 (Asia/Shanghai)
 
 **152 tests passed.** The suite now also checks percentile selection, spatially
@@ -137,6 +173,6 @@ To reproduce the pinned checkpoint locally:
 ```bash
 python -c 'from huggingface_hub import snapshot_download; snapshot_download("facebook/VGGT-1B", revision="860abec7937da0a4c03c41d3c269c366e82abdf9", allow_patterns=["config.json", "model.safetensors"], local_dir="VGGT-1B")'
 python scripts/validate_pretrained.py --model ./VGGT-1B \
-  --images temp_images/image_000.jpg temp_images/image_005.jpg \
+  --images examples/images/bathroom/image_000.jpg examples/images/bathroom/image_005.jpg \
   --output outputs/pretrained-validation --threads 4
 ```

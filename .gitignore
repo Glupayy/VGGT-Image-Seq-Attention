@@ -2,7 +2,7 @@
 output/
 ckpt/
 extracted_frames/
-examples/
+# Curated examples/ images are versioned; generated exports belong in outputs/.
 VGGT-1B/
 
 # Byte-compiled / optimized / DLL files

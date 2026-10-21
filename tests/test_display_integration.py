@@ -10,7 +10,7 @@ import pytest
 import torch
 from torch import nn
 
-from interactive_attention_tkinter import TkinterAttentionVisualizer, build_parser as gui_parser
+from vggt.attention_gui import TkinterAttentionVisualizer, build_parser as gui_parser
 from vggt.attention_cli import create_demo, main
 from vggt.visualization import DISPLAY_STYLES, render_attention_view
 

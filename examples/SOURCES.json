@@ -4,7 +4,7 @@
   "verified_unchanged_at_revision": "a288dd0f14786c93483e45524328726ab7b1b4ce",
   "files": [
     {
-      "path": "sample_images/lego/00.png",
+      "path": "examples/images/lego/00.png",
       "scene": "lego",
       "upstream_path": "examples/kitchen/images/00.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/00.png",
@@ -17,7 +17,7 @@
       ]
     },
     {
-      "path": "sample_images/lego/03.png",
+      "path": "examples/images/lego/03.png",
       "scene": "lego",
       "upstream_path": "examples/kitchen/images/03.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/03.png",
@@ -30,7 +30,7 @@
       ]
     },
     {
-      "path": "sample_images/lego/06.png",
+      "path": "examples/images/lego/06.png",
       "scene": "lego",
       "upstream_path": "examples/kitchen/images/06.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/kitchen/images/06.png",
@@ -43,7 +43,7 @@
       ]
     },
     {
-      "path": "sample_images/flower/000.png",
+      "path": "examples/images/flower/000.png",
       "scene": "flower",
       "upstream_path": "examples/llff_flower/images/000.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/000.png",
@@ -56,7 +56,7 @@
       ]
     },
     {
-      "path": "sample_images/flower/006.png",
+      "path": "examples/images/flower/006.png",
       "scene": "flower",
       "upstream_path": "examples/llff_flower/images/006.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/006.png",
@@ -69,7 +69,7 @@
       ]
     },
     {
-      "path": "sample_images/flower/012.png",
+      "path": "examples/images/flower/012.png",
       "scene": "flower",
       "upstream_path": "examples/llff_flower/images/012.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_flower/images/012.png",
@@ -82,7 +82,7 @@
       ]
     },
     {
-      "path": "sample_images/fern/000.png",
+      "path": "examples/images/fern/000.png",
       "scene": "fern",
       "upstream_path": "examples/llff_fern/images/000.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/000.png",
@@ -95,7 +95,7 @@
       ]
     },
     {
-      "path": "sample_images/fern/005.png",
+      "path": "examples/images/fern/005.png",
       "scene": "fern",
       "upstream_path": "examples/llff_fern/images/005.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/005.png",
@@ -108,7 +108,7 @@
       ]
     },
     {
-      "path": "sample_images/fern/010.png",
+      "path": "examples/images/fern/010.png",
       "scene": "fern",
       "upstream_path": "examples/llff_fern/images/010.png",
       "source_url": "https://github.com/facebookresearch/vggt/blob/b529f922f3b05fada4374ab95cd4f2b1d06f6469/examples/llff_fern/images/010.png",

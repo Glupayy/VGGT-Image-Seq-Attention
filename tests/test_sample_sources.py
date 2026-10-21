@@ -10,8 +10,8 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE_ROOT = ROOT / "sample_images"
-MANIFEST = json.loads((SAMPLE_ROOT / "SOURCES.json").read_text(encoding="utf-8"))
+SAMPLE_ROOT = ROOT / "examples/images"
+MANIFEST = json.loads((ROOT / "examples/SOURCES.json").read_text(encoding="utf-8"))
 REPOSITORY = "https://github.com/facebookresearch/vggt"
 SCENES = {
     "lego": ("examples/kitchen/images", ["00.png", "03.png", "06.png"], (779, 520)),
@@ -23,7 +23,7 @@ SCENES = {
 def test_manifest_lists_exactly_the_nine_bundled_pngs():
     entries = MANIFEST["files"]
     paths = [entry["path"] for entry in entries]
-    expected = {f"sample_images/{scene}/{name}"
+    expected = {f"examples/images/{scene}/{name}"
                 for scene, (_, names, _) in SCENES.items() for name in names}
     actual = {path.relative_to(ROOT).as_posix() for path in SAMPLE_ROOT.glob("*/*.png")}
     assert len(entries) == len(paths) == len(set(paths)) == 9
@@ -49,8 +49,8 @@ def test_sample_content_and_upstream_mapping(entry):
     scene = entry["scene"]
     upstream_directory, expected_names, expected_dimensions = SCENES[scene]
     relative = PurePosixPath(entry["path"])
-    assert relative.parts[:2] == ("sample_images", scene)
-    assert len(relative.parts) == 3 and relative.name in expected_names
+    assert relative.parts[:3] == ("examples", "images", scene)
+    assert len(relative.parts) == 4 and relative.name in expected_names
     assert entry["upstream_path"] == f"{upstream_directory}/{relative.name}"
     assert entry["source_url"] == (
         f"{REPOSITORY}/blob/{MANIFEST['source_revision']}/{entry['upstream_path']}"

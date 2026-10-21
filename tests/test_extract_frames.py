@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "extract_frames.sh"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "extract_frames.sh"
 
 
 class ExtractFramesTests(unittest.TestCase):

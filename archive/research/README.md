@@ -13,8 +13,8 @@ The two analysis scripts, [Chinese](position_analysis.py) and [English](position
 To regenerate figures, install the scripts' optional dependencies (`torch`, `numpy`, `matplotlib`, `seaborn`, and `pandas`), then run from this folder so generated files remain together:
 
 ```bash
-cd research
+cd archive/research
 python position_analysis_en.py
 ```
 
-These scripts are separate from the attention visualizer and its automated tests. See the project [README](../README.md) for the supported workflow.
+These scripts are separate from the attention visualizer and its automated tests. See the project [README](../../README.md) for the supported workflow.

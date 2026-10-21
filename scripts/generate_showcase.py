@@ -79,7 +79,7 @@ def main(argv=None):
                        "sha256": checkpoint_sha256, "strict_loading": True,
                        "model_id": "facebook/VGGT-1B", "revision": CHECKPOINT_REVISION},
         "layer": layer, "selected_heads": "all 16 heads; arithmetic mean",
-        "sample_sources": "sample_images/SOURCES.json",
+        "sample_sources": "examples/SOURCES.json",
         "curation": "Visually chosen interpretable queries; not a matching-accuracy benchmark. "
                     "Other queries can attend to boundaries or unrelated regions.",
         "display": {
@@ -97,7 +97,7 @@ def main(argv=None):
     generated_paths = []
     all_passed = True
     for scene, spec in SCENES.items():
-        paths = [ROOT / "sample_images" / scene / name for name in spec["files"]]
+        paths = [ROOT / "examples/images" / scene / name for name in spec["files"]]
         print(f"{scene}: real aggregator, capture off/on…", flush=True)
         started = perf_counter()
         images = load_and_preprocess_images([str(path) for path in paths]).cpu().float()

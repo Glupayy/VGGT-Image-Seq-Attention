@@ -2,7 +2,7 @@
 """Click image patches to explore VGGT's outgoing and incoming attention.
 
 Importing this module does not create a window, load a model, or download weights.
-Run ``python interactive_attention_tkinter.py --help`` for launch options.
+Run ``python -m vggt.attention_gui --help`` for launch options.
 """
 
 from __future__ import annotations

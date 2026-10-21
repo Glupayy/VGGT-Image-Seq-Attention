@@ -4,7 +4,7 @@
 Example (from the repository root)::
 
     python scripts/validate_pretrained.py --model /path/to/VGGT-1B \
-        --images temp_images/image_000.jpg temp_images/image_001.jpg \
+        --images examples/images/bathroom/image_000.jpg examples/images/bathroom/image_001.jpg \
         --output outputs/pretrained_validation --threads 4
 
 This runs the complete aggregator twice, with and without capture. It skips
@@ -31,9 +31,9 @@ def build_parser():
     parser.add_argument("--model", default="facebook/VGGT-1B",
                         help="Hugging Face model ID or local pretrained checkpoint directory")
     parser.add_argument("--images", nargs="+", type=Path,
-                        default=[REPO_ROOT / "temp_images/image_000.jpg",
-                                 REPO_ROOT / "temp_images/image_001.jpg"],
-                        help="One to six images; default: the first two bundled temp_images views")
+                        default=[REPO_ROOT / "examples/images/bathroom/image_000.jpg",
+                                 REPO_ROOT / "examples/images/bathroom/image_001.jpg"],
+                        help="One to six images; default: the first two bundled bathroom views")
     parser.add_argument("--output", type=Path, default=Path("outputs/pretrained_validation"),
                         help="Directory for validation.json, attention.png and attention.npz")
     parser.add_argument("--threads", type=int, default=4, help="CPU PyTorch threads (default: 4)")

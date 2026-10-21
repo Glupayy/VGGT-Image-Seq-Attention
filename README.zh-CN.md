@@ -1,6 +1,6 @@
 # VGGT Attention Explorer
 
-[English](README.md) · [验证记录](docs/validation.md) · [安装与排障](docs/package.md)
+[English](README.md) · [使用指南](docs/usage.md) · [验证记录](docs/validation.md) · [安装与排障](docs/package.md)
 
 点击一个图像 patch，查看它在其他视角中**关注哪里**。支持重点区域、候选点连线和原始双向热图三种展示。本项目是在上游 [VGGT](https://github.com/facebookresearch/vggt) 基础上开发的独立研究可视化工具。
 
@@ -12,15 +12,15 @@
 
 **切换查询位置。** 动图在驾驶舱和铲斗两个 patch 之间切换，复用同一次模型推理。每个目标视角中超过第 90 百分位的 patch 保留原色，其他区域变暗；attention 原始数值保持不变。
 
-[更多样本与展示说明](docs/showcase.md) · [原始数值与检查记录](docs/assets/showcase/validation.json) · [图片来源](sample_images/README.md)
+[更多样本与展示说明](docs/showcase.md) · [原始数值与检查记录](docs/assets/showcase/validation.json) · [图片来源](examples/README.md)
 
 ## 安装
 
 需要 Python 3.10+。在虚拟环境中先按照 [PyTorch 官方说明](https://pytorch.org/get-started/locally/) 安装适合硬件的 torch / torchvision 组合，再安装本项目：
 
 ```bash
-git clone https://github.com/Glupayy/vggt_attn.git
-cd vggt_attn
+git clone https://github.com/Glupayy/VGGT-Image-Seq-Attention.git
+cd VGGT-Image-Seq-Attention
 python -m venv .venv
 source .venv/bin/activate
 # 先在此环境安装匹配的 torch 和 torchvision
@@ -48,8 +48,8 @@ vggt-attention-gui
 命令行导出：
 
 ```bash
-vggt-attention sample_images/flower/000.png sample_images/flower/006.png \
-  sample_images/flower/012.png --source 0 --patch 14 25 --layer 11 \
+vggt-attention examples/images/flower/000.png examples/images/flower/006.png \
+  examples/images/flower/012.png --source 0 --patch 14 25 --layer 11 \
   --style links --top-k 1 --output outputs/flower.png
 ```
 
@@ -85,6 +85,15 @@ python -m pytest -q
 python -m build
 ```
 
-详见 [验证记录](docs/validation.md)。当前维护 Tkinter 与 CLI 入口；旧 OpenCV/hook 脚本与 notebook 保留作历史参考。[位置编码研究](research/README.md) 和 [开发归档](docs/archive/README.md) 单独保存，研究脚本中的模拟 attention 不作为真实模型证据。
+详见 [验证记录](docs/validation.md)。当前维护 `vggt/` 下的桌面与 CLI 入口；历史材料统一收在 [archive](archive/README.md)，其中研究脚本的模拟 attention 不作为真实模型证据。
+
+| 目录 | 用途 |
+| --- | --- |
+| [`vggt/`](vggt/) | 模型、attention 缓存、渲染、CLI 与桌面入口 |
+| [`examples/`](examples/README.md) | 多视图输入与逐文件来源记录 |
+| [`scripts/`](scripts/) | 样例生成、数值验证与抽帧工具 |
+| [`tests/`](tests/) | 无需下载权重的数值、界面与导出检查 |
+| [`docs/`](docs/usage.md) | 使用、安装、展示说明与验证记录 |
+| [`archive/`](archive/README.md) | 历史演示、notebook、结果图与研究记录 |
 
 保留上游贡献者署名与 [CC BY-NC 4.0 许可证](LICENSE.txt)。权重遵循官方仓库条款，不提交到本仓库。

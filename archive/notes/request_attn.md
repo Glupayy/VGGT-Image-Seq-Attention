@@ -1,3 +1,5 @@
+> 历史开发记录：原文中的文件名、命令与行号对应早期目录布局。当前入口见 [使用指南](../../docs/usage.md)，其他归档文件见 [归档索引](../README.md)。
+
 我的真实需求是，我会输入多视图图像，当我点击多视图图片中的某一个像素时，首先得到这个像素所属的patch，然后得到patch坐标后，得到全部图片对于这个patch的注意力图。
 你现在这个版本虽然能显示图片，但是无法做到：
 1. 无法根据选中的patch，找到对应的多帧间的attention，也就是，其余多个图片的每个patch对于这个选中patch的attention，这个attention应该从global block attention中切出来。现在的版本，无论我选哪个图像的哪个pixel。都只显示一种attention模式，我甚至不知道是什么的attention。

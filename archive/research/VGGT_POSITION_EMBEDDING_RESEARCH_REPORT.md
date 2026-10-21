@@ -1,5 +1,7 @@
 # VGGT位置信息Information Flow深度研究报告
 
+> 历史研究稿：保留原文的分析与当时文件名。研究脚本及模拟 attention 的范围见 [本目录说明](README.md)；当前工具请参阅 [使用指南](../../docs/usage.md)。
+
 ## 🎯 研究目标
 
 本研究深入分析VGGT (Visual Geometry Grounded Transformer) 模型中位置embedding的架构设计、信息流动机制，以及其在attention机制中的具体体现。通过代码分析、数学建模和可视化，揭示位置信息如何支撑VGGT的多视图几何理解能力。

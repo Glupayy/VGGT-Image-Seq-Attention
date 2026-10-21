@@ -4,9 +4,9 @@
 
 **Pick a patch. See where it attends across views.**
 
-[中文说明](README.zh-CN.md) · [Quick start](#quick-start) · [How it works](#reading-the-maps) · [Validation](docs/validation.md)
+[中文说明](README.zh-CN.md) · [Quick start](#quick-start) · [Usage](docs/usage.md) · [How it works](#reading-the-maps) · [Validation](docs/validation.md)
 
-[![Tests and package](https://github.com/Glupayy/vggt_attn/actions/workflows/ci.yml/badge.svg)](https://github.com/Glupayy/vggt_attn/actions/workflows/ci.yml)
+[![Tests and package](https://github.com/Glupayy/VGGT-Image-Seq-Attention/actions/workflows/ci.yml/badge.svg)](https://github.com/Glupayy/VGGT-Image-Seq-Attention/actions/workflows/ci.yml)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB)
 [![VGGT](https://img.shields.io/badge/built_on-VGGT-157f79)](https://github.com/facebookresearch/vggt)
 [![License](https://img.shields.io/badge/license-CC_BY--NC_4.0-lightgrey)](LICENSE.txt)
@@ -32,15 +32,15 @@ A research visualization tool built on [VGGT](https://github.com/facebookresearc
 
 **Change the query, watch the spotlight change.** The two LEGO frames reuse the same model forward. Patches above the 90th percentile within each target view retain their color; other pixels are dimmed. Raw attention is preserved.
 
-[More examples and display guide](docs/showcase.md) · [Numerical validation](docs/assets/showcase/validation.json) · [Sample sources](sample_images/README.md)
+[More examples and display guide](docs/showcase.md) · [Numerical validation](docs/assets/showcase/validation.json) · [Sample sources](examples/README.md)
 
 ## Quick start
 
 Use Python 3.10 or newer. Install a matching PyTorch / torchvision pair for your hardware using the [official selector](https://pytorch.org/get-started/locally/), then:
 
 ```bash
-git clone https://github.com/Glupayy/vggt_attn.git
-cd vggt_attn
+git clone https://github.com/Glupayy/VGGT-Image-Seq-Attention.git
+cd VGGT-Image-Seq-Attention
 python -m venv .venv
 source .venv/bin/activate
 # Install torch and torchvision in this environment first.
@@ -60,7 +60,7 @@ This uses a deterministic, randomly initialized tiny VGGT aggregator and synthet
 ```bash
 vggt-attention-gui
 # Equivalent source entry:
-python interactive_attention_tkinter.py
+python -m vggt.attention_gui
 ```
 
 Select 1–6 related views, run attention capture, then click a patch. Switch the display between `spotlight`, `links` and `raw`; both clicks and style changes reuse the cache. The default layer is `global_block_11`. The viewer loads the model lazily and keeps the interface responsive while inference runs.
@@ -70,15 +70,15 @@ The default model is [`facebook/VGGT-1B`](https://huggingface.co/facebook/VGGT-1
 ### Export a specific patch
 
 ```bash
-vggt-attention sample_images/flower/000.png sample_images/flower/006.png \
-  sample_images/flower/012.png --source 0 --patch 14 25 --layer 11 \
+vggt-attention examples/images/flower/000.png examples/images/flower/006.png \
+  examples/images/flower/012.png --source 0 --patch 14 25 --layer 11 \
   --style links --top-k 1 --output outputs/flower.png
 ```
 
 All indices are zero-based. `--patch ROW COL` refers to the **preprocessed** image grid, not original image pixels. Omit `--patch` to select its center. To use a local checkpoint:
 
 ```bash
-vggt-attention sample_images/lego/00.png --model ./VGGT-1B \
+vggt-attention examples/images/lego/00.png --model ./VGGT-1B \
   --device cpu --output outputs/local.png
 ```
 
@@ -133,21 +133,16 @@ python -m build
 
 [Validation notes](docs/validation.md) describe the tested environment, numerical checks, and real-model verification. GitHub Actions runs CPU tests and builds on Python 3.10 and 3.12 after publication; the badge reflects the remote workflow state.
 
-| Path | Purpose |
+| Directory | Purpose |
 | --- | --- |
-| `interactive_attention_tkinter.py` | Maintained desktop viewer |
-| `vggt/attention_cli.py` | Reproducible headless exports |
-| `vggt/visualization.py` | Shared plotting code |
-| `vggt/showcase.py` | Query spotlight and sparse target figures |
-| `vggt/utils/attention_cache.py` | Model-local, chunked attention capture |
-| `show_attention.ipynb` | Historical exploratory notebook; see the guide before use |
-| `sample_images/` | Three official sample scenes with per-file source hashes |
-| `scripts/generate_showcase.py` | Reproduce the real gallery and independent numeric checks |
-| `temp_images/` | Original bathroom views retained for earlier validation |
-| [`research/`](research/README.md) | Archived RoPE / position experiments, including schematic simulations |
-| [`docs/archive/`](docs/archive/README.md) | Original development notes and old demonstrations |
+| [`vggt/`](vggt/) | Model, attention capture, rendering, CLI and desktop viewer |
+| [`examples/`](examples/README.md) | Multi-view inputs and per-file source records |
+| [`scripts/`](scripts/) | Gallery generation, numerical validation and frame sampling |
+| [`tests/`](tests/) | Offline numerical, interface and export checks |
+| [`docs/`](docs/usage.md) | Usage, installation, display guide and validation records |
+| [`archive/`](archive/README.md) | Historical demos, notebooks, figures and research notes |
 
-The OpenCV and old-hook viewers remain historical alternatives; current fixes and tests target the Tkinter and CLI entries. The original upstream introduction is preserved in [the upstream notes](docs/upstream-vggt.md).
+Current fixes and tests target the desktop and CLI entries in `vggt/`. Historical material is grouped under `archive/`. The original upstream introduction is preserved in [the upstream notes](docs/upstream-vggt.md).
 
 ## Attribution and license
 

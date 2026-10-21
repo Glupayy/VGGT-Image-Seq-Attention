@@ -1,6 +1,5 @@
 """GUI coordinate and launch tests that need neither a display nor weights."""
 
-from pathlib import Path
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -8,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from interactive_attention_tkinter import TkinterAttentionVisualizer
+from vggt.attention_gui import TkinterAttentionVisualizer
 
 
 @pytest.fixture
@@ -83,23 +82,35 @@ def test_image_count_is_explicitly_validated(count):
 
 
 def test_help_needs_no_tk_window_or_model():
-    script = Path(__file__).resolve().parents[1] / "interactive_attention_tkinter.py"
-    result = subprocess.run([sys.executable, str(script), "--help"], capture_output=True, text=True, check=True)
+    result = subprocess.run([sys.executable, "-m", "vggt.attention_gui", "--help"],
+                            capture_output=True, text=True, check=True)
     assert "--max-heads" in result.stdout
     assert "--device" in result.stdout
     assert "facebook/VGGT-1B" not in result.stderr
 
 
 def test_import_does_not_import_torch_or_tkinter():
-    script = Path(__file__).resolve().parents[1] / "interactive_attention_tkinter.py"
     code = (
-        "import importlib.util, sys; "
-        f"spec = importlib.util.spec_from_file_location('viewer', {str(script)!r}); "
-        "module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+        "import sys; import vggt.attention_gui; "
         "assert 'torch' not in sys.modules; assert 'tkinter' not in sys.modules; "
         "assert 'vggt.models.vggt_vis' not in sys.modules"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_module_help_does_not_import_torch_or_tkinter():
+    code = """import runpy
+import sys
+sys.argv = ['vggt.attention_gui', '--help']
+try:
+    runpy.run_module('vggt.attention_gui', run_name='__main__')
+except SystemExit as error:
+    assert error.code == 0
+assert 'torch' not in sys.modules
+assert 'tkinter' not in sys.modules
+assert 'vggt.models.vggt_vis' not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
 
 
 def test_load_worker_only_queues_results_and_caches_selected_layer(tmp_path, monkeypatch):

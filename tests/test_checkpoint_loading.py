@@ -63,7 +63,7 @@ def test_incompatible_local_checkpoint_is_rejected(tiny_vggt, checkpoint_directo
 
 
 def test_gui_rejects_incompatible_checkpoint(tiny_vggt, checkpoint_directory):
-    from interactive_attention_tkinter import TkinterAttentionVisualizer
+    from vggt.attention_gui import TkinterAttentionVisualizer
 
     write_incompatible_checkpoint(checkpoint_directory)
     viewer = TkinterAttentionVisualizer(model=str(checkpoint_directory), device="cpu")
@@ -73,7 +73,7 @@ def test_gui_rejects_incompatible_checkpoint(tiny_vggt, checkpoint_directory):
 
 
 def test_gui_accepts_matching_checkpoint_without_opening_window(tiny_vggt, checkpoint_directory):
-    from interactive_attention_tkinter import TkinterAttentionVisualizer
+    from vggt.attention_gui import TkinterAttentionVisualizer
 
     original = tiny_vggt(img_size=28, patch_size=14, embed_dim=8)
     save_file(original.state_dict(), str(checkpoint_directory / "model.safetensors"))

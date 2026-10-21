@@ -26,15 +26,12 @@ research = ["seaborn", "pandas"]
 
 [project.scripts]
 vggt-attention = "vggt.attention_cli:main"
-vggt-attention-gui = "interactive_attention_tkinter:main"
+vggt-attention-gui = "vggt.attention_gui:main"
 
 [project.urls]
-Repository = "https://github.com/Glupayy/vggt_attn"
-Issues = "https://github.com/Glupayy/vggt_attn/issues"
+Repository = "https://github.com/Glupayy/VGGT-Image-Seq-Attention"
+Issues = "https://github.com/Glupayy/VGGT-Image-Seq-Attention/issues"
 Upstream = "https://github.com/facebookresearch/vggt"
-
-[tool.setuptools]
-py-modules = ["attention_cache", "interactive_attention_tkinter"]
 
 [tool.setuptools.packages.find]
 where = ["."]

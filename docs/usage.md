@@ -1,7 +1,7 @@
 # Attention visualization guide
 
-The maintained paths are the Tkinter viewer and the headless CLI. Start with
-[README](README.md) or [中文说明](README.zh-CN.md).
+The maintained paths are the Tkinter viewer (`vggt/attention_gui.py`) and the headless CLI (`vggt/attention_cli.py`). Start with
+[README](../README.md) or [中文说明](../README.zh-CN.md).
 
 ## Workflow
 
@@ -25,7 +25,7 @@ coordinates do not transfer directly. Special tokens are omitted from overlays.
 The saved NPZ contains raw probabilities, without display normalization.
 The CLI and GUI default to block 11 and average all heads. Spotlight applies a
 within-view percentile cutoff; sparse links mark raw attention peaks. See the
-[gallery](docs/showcase.md) for real samples and the exact display transforms.
+[gallery](showcase.md) for real samples and the exact display transforms.
 
 ## Capture API
 
@@ -53,11 +53,10 @@ Omitting an explicit layer list in the core API retains block 23 for compatibili
 
 ## Historical notebook
 
-`show_attention.ipynb` records the original hook-based exploration. Its outputs
+[`archive/notebooks/show_attention.ipynb`](../archive/notebooks/show_attention.ipynb) records the original hook-based exploration. Its outputs
 and machine paths were cleared for publication. It is not part of the maintained
 validation path; APIs and assumptions in old cells may differ from current ones.
-The old processing report is retained as a dated implementation record, not a
-specification of today's cache.
+The [old processing report](../archive/notes/VGGT_ATTENTION_PROCESSING_REPORT.md) is retained as a dated implementation record. See the [archive index](../archive/README.md) for historical materials and the current API above for the maintained cache.
 
 Layer-wise entropy conclusions in earlier notes came from individual examples.
 They are not general model-level findings established by this repository's tests.

@@ -9,7 +9,7 @@ Then run `python -m pip install -e '.[dev]'` from the repository.
 - `vggt-attention --help`: headless export, no model download.
 - `vggt-attention --demo`: offline synthetic tiny-model validation.
 - `vggt-attention-gui --help`: desktop launch options, no window or model load.
-- `python interactive_attention_tkinter.py`: equivalent source GUI entry.
+- `python -m vggt.attention_gui`: equivalent source GUI entry.
 
 CLI and GUI default to `global_block_11` and `spotlight`. Use `--style links`
 for sparse outgoing targets or `--style raw` for shared-scale outgoing/incoming
@@ -20,7 +20,7 @@ thresholds. The core cache API retains its block-23 compatibility default.
 `pip install .` also installs the CLI, GUI and cache modules. Optional extras:
 `[notebook]` for JupyterLab, `[demo]` for upstream reconstruction demos, `[research]`
 for the archived position-analysis scripts. COLMAP and LightGlue requirements are
-listed separately in `requirements_demo.txt` and are not needed for attention.
+listed separately in [`archive/upstream/requirements.txt`](../archive/upstream/requirements.txt) and are not needed for attention. Historical reconstruction scripts and notebooks are collected in [`archive/`](../archive/README.md); the maintained attention entry points live in `vggt/`.
 
 ## Desktop dependencies
 

@@ -2,7 +2,7 @@
 
 The gallery uses three real views per scene from the official VGGT examples:
 flowers, a LEGO bulldozer, and a potted fern. Original image bytes and per-file
-hashes are recorded in [the sample manifest](../sample_images/SOURCES.json).
+hashes are recorded in [the sample manifest](../examples/SOURCES.json).
 The figures use the official VGGT-1B checkpoint, CPU float32, global block 11
 (zero-based), and the arithmetic mean of all 16 heads.
 
@@ -82,8 +82,8 @@ numeric checks. Raw maps, preprocessed inputs, and full reference vectors:
 Export one query through the installed CLI:
 
 ```bash
-vggt-attention sample_images/flower/000.png sample_images/flower/006.png \
-  sample_images/flower/012.png --model ./VGGT-1B --device cpu \
+vggt-attention examples/images/flower/000.png examples/images/flower/006.png \
+  examples/images/flower/012.png --model ./VGGT-1B --device cpu \
   --layer 11 --patch 14 25 --style links --top-k 1 \
   --output outputs/flower.png
 ```

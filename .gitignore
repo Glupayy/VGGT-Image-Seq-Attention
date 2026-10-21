@@ -2,7 +2,7 @@
 output/
 ckpt/
 extracted_frames/
-examples/
+# Curated examples/ images are versioned; generated exports belong in outputs/.
 VGGT-1B/
 
 # Byte-compiled / optimized / DLL files
@@ -151,3 +151,19 @@ skyseg.onnx
 # pixi environments
 .pixi
 *.egg-info
+
+# Local tooling, downloaded weights, and generated attention exports
+.DS_Store
+.vscode/
+.idea/
+.claude/
+.codex/
+*.safetensors
+*.pt
+*.pth
+outputs/
+validation-local/
+*.npz
+!docs/assets/bathroom-attention.npz
+!docs/assets/showcase/*.npz
+*.tmp

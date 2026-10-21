@@ -1,2 +1,2 @@
-# SCM syntax highlighting & preventing 3-way merges
-pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+# Historical notebooks and demos should not dominate the active language chart.
+archive/** linguist-detectable=false

@@ -1,0 +1,7 @@
+include LICENSE.txt README.md README.zh-CN.md CODE_OF_CONDUCT.md CONTRIBUTING.md
+include requirements.txt
+recursive-include docs *.md *.svg *.png *.gif *.json *.npz
+recursive-include tests *.py
+recursive-include scripts *.py *.sh
+recursive-include examples *.png *.jpg *.md *.json
+recursive-include archive *.py *.md *.png *.ipynb *.txt

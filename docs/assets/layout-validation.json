@@ -1,0 +1,52 @@
+{
+  "kind": "repository-layout-validation",
+  "date": "2026-10-21",
+  "passed": true,
+  "root_entries": {
+    "before": 44,
+    "after": 17,
+    "public_project_directories": [
+      "vggt",
+      "examples",
+      "scripts",
+      "tests",
+      "docs",
+      "archive"
+    ]
+  },
+  "preservation": {
+    "original_tracked_files_all_accounted_for": 152,
+    "unchanged_files_verified_byte_for_byte": 60,
+    "sample_images_preserved": 15,
+    "historical_notebooks_preserved": 3,
+    "gui_implementation_preserved": true,
+    "gui_change": "module relocation and launch-command docstring only"
+  },
+  "tests": {
+    "source_checkout_passed": 153,
+    "extracted_sdist_passed": 153
+  },
+  "package": {
+    "sdist_built": true,
+    "wheel_built": true,
+    "gui_entry": "vggt.attention_gui:main",
+    "scripts_and_examples_and_archive_in_sdist": true,
+    "root_legacy_modules_absent_from_wheel": true,
+    "model_weights_in_distributions": false
+  },
+  "installed_wheel": {
+    "passed": true,
+    "environment": "installed wheel from /private/tmp, outside source checkout",
+    "gui_module": "vggt.attention_gui",
+    "gui_console_help_passed": true,
+    "offline_styles": [
+      "spotlight",
+      "links",
+      "raw"
+    ],
+    "relocated_flower_preprocessing_matches_published_inputs": true,
+    "cached_raw_attention_render_matches_published_png": true,
+    "scope": "entry points, moved image paths and cached rendering; no new pretrained model inference"
+  },
+  "scope": "File organization, imports, entry points, image paths, documentation and packaging. Previous numeric inference records retained as historical evidence."
+}

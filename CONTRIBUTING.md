@@ -1,31 +1,23 @@
-# Contributing to vggt
-We want to make contributing to this project as easy and transparent as
-possible.
+# Contributing
 
-## Pull Requests
-We actively welcome your pull requests.
+This is an independent VGGT attention visualization extension. Open an issue with
+your Python/PyTorch versions, device, image count and preprocessed shape, selected
+layer, and a minimal reproduction. Do not attach model weights or private images.
 
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Make sure your code lints.
-6. If you haven't already, complete the Contributor License Agreement ("CLA").
+For changes, branch from the current default branch, keep upstream notices, and
+update the relevant documentation. Install `.[dev]` with a matching torch/torchvision
+pair, then run:
 
-## Contributor License Agreement ("CLA")
-In order to accept your pull request, we need you to submit a CLA. You only need
-to do this once to work on any of Facebook's open source projects.
+```bash
+python -m pytest -q
+python -m build
+vggt-attention --demo --output outputs/demo.png
+```
 
-Complete your CLA here: <https://code.facebook.com/cla>
+Tests use tiny random models and require no download. Add numerical references for
+attention changes, especially head selection, special-token offsets and batch
+indexing. Desktop changes should keep Tk access on the main thread and preserve
+headless imports. Real pretrained checks belong in the validation record with
+checkpoint revision and environment; synthetic results must be labelled.
 
-## Issues
-We use GitHub issues to track public bugs. Please ensure your description is
-clear and has sufficient instructions to be able to reproduce the issue.
-
-Facebook has a [bounty program](https://www.facebook.com/whitehat/) for the safe
-disclosure of security bugs. In those cases, please go through the process
-outlined on that page and do not file a public issue.
-
-## License
-By contributing to vggt, you agree that your contributions will be licensed
-under the LICENSE file in the root directory of this source tree.
+Contributions retain the terms of [LICENSE.txt](LICENSE.txt).
